@@ -1,0 +1,84 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #f0f0f0;
+}
+
+.navbar {
+    background-color: #333;
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 1000;
+}
+
+.navbar h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.status-indicator {
+    font-weight: bold;
+    padding: 5px 10px;
+    border-radius: 5px;
+}
+
+.status-indicator.connected {
+    background-color: #28a745; /* Green */
+}
+
+.status-indicator.disconnected {
+    background-color: #dc3545; /* Red */
+}
+
+.main-content {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.control-panel {
+    background-color: #eee;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-right: 1px solid #ccc;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    z-index: 900;
+}
+
+.control-panel button,
+.control-panel select,
+.control-panel input[type="color"] {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.control-panel button {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+    transition: background-color 0.2s ease;
+}
+
+.control-panel button:hover {
+    background-color: #0056b3;
+}
+
+canvas {
+    flex-grow: 1;
+    background-color: white;
+    border: 1px solid #ccc;
+    cursor: crosshair;
+}

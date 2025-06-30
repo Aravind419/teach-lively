@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DoodleTogether</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="navbar">
+      <h1>DoodleTogether</h1>
+      <span id="connectionStatus" class="status-indicator disconnected"
+        >🔴 Disconnected</span
+      >
+    </div>
+    <div class="main-content">
+      <div class="control-panel">
+        <div class="color-picker">
+          <input
+            type="color"
+            id="colorPicker"
+            value="#000000"
+            title="Choose drawing color" />
+        </div>
+        <div class="brush-size-selector">
+          <label for="brushSize">Brush Size:</label>
+          <select id="brushSize">
+            <option value="5">Small</option>
+            <option value="10" selected>Medium</option>
+            <option value="20">Large</option>
+          </select>
+        </div>
+        <button id="clearCanvas">Clear Canvas</button>
+        <button id="saveImage">Save as Image</button>
+        <button id="startAudioCall">Start Audio Call</button>
+        <button id="stopAudioCall" style="display: none">
+          Stop Audio Call
+        </button>
+      </div>
+      <canvas id="whiteboard"></canvas>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="client.js"></script>
+  </body>
+</html>
