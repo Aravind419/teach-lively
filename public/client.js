@@ -12,6 +12,14 @@ const userList = document.getElementById("userList");
 const usernameModal = document.getElementById("usernameModal");
 const usernameInput = document.getElementById("usernameInput");
 const joinBtn = document.getElementById("joinBtn");
+const passwordInput = document.getElementById("passwordInput");
+const confirmPasswordInput = document.getElementById("confirmPasswordInput");
+const loginTab = document.getElementById("loginTab");
+const registerTab = document.getElementById("registerTab");
+const registerBtn = document.getElementById("registerBtn");
+const modalTitle = document.getElementById("modalTitle");
+const loginError = document.getElementById("loginError");
+const printBtn = document.getElementById("printBtn");
 
 let isDrawing = false;
 let lastX = 0;
@@ -23,13 +31,52 @@ let peer = null;
 let audioCallActive = false;
 let username = "";
 
+// Mobile menu toggle logic
+const menuToggle = document.getElementById("menuToggle");
+const controlPanel = document.getElementById("controlPanel");
+if (menuToggle && controlPanel) {
+  menuToggle.addEventListener("click", () => {
+    controlPanel.classList.toggle("open");
+  });
+  // Auto-close menu after action on mobile
+  function autoCloseMenu() {
+    if (window.innerWidth <= 700) {
+      controlPanel.classList.remove("open");
+    }
+  }
+  // Color picker
+  colorPicker.addEventListener("change", autoCloseMenu);
+  // Brush size
+  brushSizeSelector.addEventListener("change", autoCloseMenu);
+  // Clear, save, print, audio call
+  [
+    clearCanvasBtn,
+    saveImageBtn,
+    printBtn,
+    startAudioCallBtn,
+    stopAudioCallBtn,
+  ].forEach((btn) => {
+    if (btn) btn.addEventListener("click", autoCloseMenu);
+  });
+}
+
 // Set canvas dimensions
 function resizeCanvas() {
-  canvas.width =
-    window.innerWidth -
-    (document.querySelector(".control-panel").offsetWidth || 0);
-  canvas.height =
-    window.innerHeight - (document.querySelector(".navbar").offsetHeight || 0);
+  const isMobile = window.innerWidth <= 700;
+  if (isMobile) {
+    canvas.width = window.innerWidth;
+    canvas.height =
+      window.innerHeight -
+      (document.querySelector(".navbar").offsetHeight || 0) -
+      60;
+  } else {
+    canvas.width =
+      window.innerWidth -
+      (document.querySelector(".control-panel").offsetWidth || 0);
+    canvas.height =
+      window.innerHeight -
+      (document.querySelector(".navbar").offsetHeight || 0);
+  }
 }
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas(); // Initial resize
@@ -220,6 +267,46 @@ function hideUsernameModal() {
   usernameModal.style.display = "none";
 }
 
+// Tab switching logic
+loginTab.addEventListener("click", () => {
+  loginTab.style.background = "#007bff";
+  loginTab.style.color = "#fff";
+  registerTab.style.background = "#fff";
+  registerTab.style.color = "#007bff";
+  modalTitle.textContent = "Login to join";
+  joinBtn.style.display = "";
+  registerBtn.style.display = "none";
+  confirmPasswordInput.style.display = "none";
+  loginError.textContent = "";
+});
+registerTab.addEventListener("click", () => {
+  loginTab.style.background = "#fff";
+  loginTab.style.color = "#007bff";
+  registerTab.style.background = "#007bff";
+  registerTab.style.color = "#fff";
+  modalTitle.textContent = "Register new account";
+  joinBtn.style.display = "none";
+  registerBtn.style.display = "";
+  confirmPasswordInput.style.display = "";
+  loginError.textContent = "";
+});
+
+// Registration logic
+registerBtn.addEventListener("click", () => {
+  const name = usernameInput.value.trim();
+  const password = passwordInput.value;
+  const confirmPassword = confirmPasswordInput.value;
+  if (!name || !password || !confirmPassword) {
+    loginError.textContent = "Please fill all fields.";
+    return;
+  }
+  if (password !== confirmPassword) {
+    loginError.textContent = "Passwords do not match.";
+    return;
+  }
+  socket.emit("register", { name, password });
+});
+
 // Show modal on load, unless username is in localStorage
 const storedName = localStorage.getItem("username");
 if (storedName) {
@@ -232,17 +319,57 @@ if (storedName) {
 
 joinBtn.addEventListener("click", () => {
   const name = usernameInput.value.trim();
-  if (name) {
-    username = name;
-    localStorage.setItem("username", username);
-    socket.emit("set-username", username);
-    hideUsernameModal();
+  const password = passwordInput.value;
+  if (name && password) {
+    socket.emit("login", { name, password });
   } else {
+    loginError.textContent = "Please enter username and password.";
     usernameInput.focus();
   }
 });
 usernameInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") joinBtn.click();
+  if (e.key === "Enter") {
+    if (joinBtn.style.display !== "none") joinBtn.click();
+    if (registerBtn.style.display !== "none") registerBtn.click();
+  }
+});
+passwordInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    if (joinBtn.style.display !== "none") joinBtn.click();
+    if (registerBtn.style.display !== "none") registerBtn.click();
+  }
+});
+confirmPasswordInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && registerBtn.style.display !== "none")
+    registerBtn.click();
+});
+
+// Listen for login result
+socket.on("login-result", (result) => {
+  if (result.success) {
+    username = result.name;
+    localStorage.setItem("username", username);
+    hideUsernameModal();
+    socket.emit("set-username", username);
+  } else {
+    loginError.textContent = result.message || "Login failed";
+    passwordInput.value = "";
+    passwordInput.focus();
+  }
+});
+// Listen for register result
+socket.on("register-result", (result) => {
+  if (result.success) {
+    username = result.name;
+    localStorage.setItem("username", username);
+    hideUsernameModal();
+    socket.emit("set-username", username);
+  } else {
+    loginError.textContent = result.message || "Registration failed";
+    passwordInput.value = "";
+    confirmPasswordInput.value = "";
+    passwordInput.focus();
+  }
 });
 
 // Listen for user list updates
@@ -251,9 +378,46 @@ socket.on("user-list", (users) => {
 });
 
 // Add print button logic
-const printBtn = document.getElementById("printBtn");
 if (printBtn) {
   printBtn.addEventListener("click", () => {
     window.print();
   });
 }
+
+// --- Touch support for drawing on mobile ---
+canvas.addEventListener("touchstart", (e) => {
+  if (e.touches.length === 1) {
+    isDrawing = true;
+    const rect = canvas.getBoundingClientRect();
+    lastX = e.touches[0].clientX - rect.left;
+    lastY = e.touches[0].clientY - rect.top;
+  }
+});
+canvas.addEventListener(
+  "touchmove",
+  (e) => {
+    if (!isDrawing || e.touches.length !== 1) return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x1 = e.touches[0].clientX - rect.left;
+    const y1 = e.touches[0].clientY - rect.top;
+    drawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize);
+    socket.emit("draw", {
+      x0: lastX,
+      y0: lastY,
+      x1: x1,
+      y1: y1,
+      color: currentColor,
+      size: currentBrushSize,
+    });
+    lastX = x1;
+    lastY = y1;
+  },
+  { passive: false }
+);
+canvas.addEventListener("touchend", () => {
+  isDrawing = false;
+});
+canvas.addEventListener("touchcancel", () => {
+  isDrawing = false;
+});

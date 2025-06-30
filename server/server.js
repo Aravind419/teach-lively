@@ -83,6 +83,75 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("audio-signal", data);
   });
 
+  socket.on("login", async ({ name, password }) => {
+    if (!usersCollection) {
+      socket.emit("login-result", {
+        success: false,
+        message: "Database not ready",
+      });
+      return;
+    }
+    try {
+      const user = await usersCollection.findOne({ name });
+      if (user) {
+        if (user.password === password) {
+          socket.emit("login-result", { success: true, name });
+        } else {
+          socket.emit("login-result", {
+            success: false,
+            message: "Incorrect password",
+          });
+        }
+      } else {
+        // Register new user
+        await usersCollection.insertOne({
+          name,
+          password,
+          createdAt: new Date(),
+          lastActive: new Date(),
+        });
+        socket.emit("login-result", { success: true, name });
+      }
+    } catch (err) {
+      socket.emit("login-result", {
+        success: false,
+        message: "Error: " + err.message,
+      });
+    }
+  });
+
+  socket.on("register", async ({ name, password }) => {
+    if (!usersCollection) {
+      socket.emit("register-result", {
+        success: false,
+        message: "Database not ready",
+      });
+      return;
+    }
+    try {
+      const user = await usersCollection.findOne({ name });
+      if (user) {
+        socket.emit("register-result", {
+          success: false,
+          message: "Username already exists",
+        });
+      } else {
+        await usersCollection.insertOne({
+          name,
+          password,
+          createdAt: new Date(),
+          lastActive: new Date(),
+        });
+        socket.emit("register-result", { success: true, name });
+      }
+    } catch (err) {
+      socket.emit("register-result", {
+        success: false,
+        message: "Error: " + err.message,
+      });
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("User disconnected");
     delete userNames[socket.id];
