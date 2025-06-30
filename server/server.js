@@ -9,9 +9,12 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
-const MONGO_URL = process.env.MONGO_URL || "mongodb://localhost:27017";
+const MONGO_URL = process.env.MONGO_URL;
 const DB_NAME = "doodletogether";
 let drawingsCollection;
+
+// Track usernames by socket id
+const userNames = {};
 
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, "../public")));
@@ -29,6 +32,16 @@ MongoClient.connect(MONGO_URL, { useUnifiedTopology: true })
 io.on("connection", (socket) => {
   console.log("A user connected");
   io.emit("userConnected", io.engine.clientsCount);
+
+  // Send updated user list to all clients
+  function broadcastUserList() {
+    io.emit("user-list", Object.values(userNames));
+  }
+
+  socket.on("set-username", (name) => {
+    userNames[socket.id] = name;
+    broadcastUserList();
+  });
 
   socket.on("draw", (data) => {
     socket.broadcast.emit("draw", data); // Broadcast drawing data to other clients
@@ -58,6 +71,8 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log("User disconnected");
+    delete userNames[socket.id];
+    broadcastUserList();
     io.emit("userDisconnected", io.engine.clientsCount);
   });
 });
