@@ -8,6 +8,10 @@ const saveImageBtn = document.getElementById("saveImage");
 const connectionStatus = document.getElementById("connectionStatus");
 const startAudioCallBtn = document.getElementById("startAudioCall");
 const stopAudioCallBtn = document.getElementById("stopAudioCall");
+const userList = document.getElementById("userList");
+const usernameModal = document.getElementById("usernameModal");
+const usernameInput = document.getElementById("usernameInput");
+const joinBtn = document.getElementById("joinBtn");
 
 let isDrawing = false;
 let lastX = 0;
@@ -17,6 +21,7 @@ let currentBrushSize = parseInt(brushSizeSelector.value);
 let localStream = null;
 let peer = null;
 let audioCallActive = false;
+let username = "";
 
 // Set canvas dimensions
 function resizeCanvas() {
@@ -35,6 +40,9 @@ socket.on("connect", () => {
   connectionStatus.textContent = "🟢 Connected";
   connectionStatus.classList.remove("disconnected");
   connectionStatus.classList.add("connected");
+  if (username) {
+    socket.emit("set-username", username);
+  }
 });
 
 socket.on("disconnect", () => {
@@ -200,4 +208,36 @@ saveImageBtn.addEventListener("click", () => {
   a.click();
   document.body.removeChild(a);
   saveDrawingToServer();
+});
+
+// Prevent interaction until username is set
+function showUsernameModal() {
+  usernameModal.style.display = "flex";
+  usernameInput.value = "";
+  usernameInput.focus();
+}
+function hideUsernameModal() {
+  usernameModal.style.display = "none";
+}
+
+joinBtn.addEventListener("click", () => {
+  const name = usernameInput.value.trim();
+  if (name) {
+    username = name;
+    socket.emit("set-username", username);
+    hideUsernameModal();
+  } else {
+    usernameInput.focus();
+  }
+});
+usernameInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") joinBtn.click();
+});
+
+// Show modal on load
+showUsernameModal();
+
+// Listen for user list updates
+socket.on("user-list", (users) => {
+  userList.textContent = "Users: " + users.join(", ");
 });

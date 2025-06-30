@@ -12,6 +12,7 @@
       <span id="connectionStatus" class="status-indicator disconnected"
         >🔴 Disconnected</span
       >
+      <span id="userList" class="user-list"></span>
     </div>
     <div class="main-content">
       <div class="control-panel">
@@ -38,6 +39,48 @@
         </button>
       </div>
       <canvas id="whiteboard"></canvas>
+    </div>
+
+    <!-- Username Modal -->
+    <div
+      id="usernameModal"
+      class="modal"
+      style="
+        display: flex;
+        position: fixed;
+        z-index: 2000;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+      ">
+      <div
+        style="
+          background: #fff;
+          padding: 2em;
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          text-align: center;
+        ">
+        <h2>Enter your name to join</h2>
+        <input
+          id="usernameInput"
+          type="text"
+          placeholder="Your name"
+          style="
+            padding: 0.5em;
+            font-size: 1em;
+            width: 80%;
+            margin-bottom: 1em;
+          " />
+        <br />
+        <button id="joinBtn" style="padding: 0.5em 1.5em; font-size: 1em">
+          Join
+        </button>
+      </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
