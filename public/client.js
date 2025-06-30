@@ -220,10 +220,21 @@ function hideUsernameModal() {
   usernameModal.style.display = "none";
 }
 
+// Show modal on load, unless username is in localStorage
+const storedName = localStorage.getItem("username");
+if (storedName) {
+  username = storedName;
+  socket.emit("set-username", username);
+  hideUsernameModal();
+} else {
+  showUsernameModal();
+}
+
 joinBtn.addEventListener("click", () => {
   const name = usernameInput.value.trim();
   if (name) {
     username = name;
+    localStorage.setItem("username", username);
     socket.emit("set-username", username);
     hideUsernameModal();
   } else {
@@ -234,10 +245,15 @@ usernameInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") joinBtn.click();
 });
 
-// Show modal on load
-showUsernameModal();
-
 // Listen for user list updates
 socket.on("user-list", (users) => {
   userList.textContent = "Users: " + users.join(", ");
 });
+
+// Add print button logic
+const printBtn = document.getElementById("printBtn");
+if (printBtn) {
+  printBtn.addEventListener("click", () => {
+    window.print();
+  });
+}

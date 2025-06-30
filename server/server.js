@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 const MONGO_URL = process.env.MONGO_URL;
 const DB_NAME = "doodletogether";
 let drawingsCollection;
+let usersCollection;
 
 // Track usernames by socket id
 const userNames = {};
@@ -23,6 +24,7 @@ MongoClient.connect(MONGO_URL, { useUnifiedTopology: true })
   .then((client) => {
     const db = client.db(DB_NAME);
     drawingsCollection = db.collection("drawings");
+    usersCollection = db.collection("users");
     console.log("Connected to MongoDB");
   })
   .catch((err) => {
@@ -38,9 +40,21 @@ io.on("connection", (socket) => {
     io.emit("user-list", Object.values(userNames));
   }
 
-  socket.on("set-username", (name) => {
+  socket.on("set-username", async (name) => {
     userNames[socket.id] = name;
     broadcastUserList();
+    // Store or update user in DB
+    if (usersCollection && name) {
+      try {
+        await usersCollection.updateOne(
+          { name },
+          { $set: { name, lastActive: new Date() } },
+          { upsert: true }
+        );
+      } catch (err) {
+        console.error("Error saving user:", err);
+      }
+    }
   });
 
   socket.on("draw", (data) => {
