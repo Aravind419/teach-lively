@@ -36,7 +36,6 @@ let username = "";
 let isTextMode = false;
 let activeTool = "draw"; // 'draw' or 'text'
 let liveTextPreviews = {};
-let mySocketId = null;
 
 // Mobile menu toggle logic
 const menuToggle = document.getElementById("menuToggle");
@@ -90,7 +89,6 @@ resizeCanvas(); // Initial resize
 
 // Socket.io events
 socket.on("connect", () => {
-  mySocketId = socket.id;
   console.log("Connected to server");
   connectionStatus.textContent = "🟢 Connected";
   connectionStatus.classList.remove("disconnected");
@@ -533,16 +531,6 @@ setActiveTool("draw");
 textInputOverlay.addEventListener("input", () => {
   if (activeTool !== "text") return;
   const input = textInputOverlay.value;
-  // Update your own preview locally
-  liveTextPreviews[mySocketId] = {
-    x: textInputOverlay._canvasX,
-    y: textInputOverlay._canvasY,
-    text: input,
-    color: currentColor,
-    size: currentBrushSize,
-    socketId: mySocketId,
-  };
-  drawAllLiveTextPreviews();
   socket.emit("live-text", {
     x: textInputOverlay._canvasX,
     y: textInputOverlay._canvasY,
@@ -554,10 +542,8 @@ textInputOverlay.addEventListener("input", () => {
 
 // Render live text previews from other users
 socket.on("live-text", (data) => {
-  if (data.socketId && data.socketId !== mySocketId) {
-    liveTextPreviews[data.socketId] = data;
-    drawAllLiveTextPreviews();
-  }
+  liveTextPreviews[data.socketId] = data;
+  drawAllLiveTextPreviews();
 });
 
 function drawAllLiveTextPreviews() {
@@ -580,12 +566,6 @@ function drawAllLiveTextPreviews() {
 }
 
 // Remove preview when text is finalized or overlay is hidden
-function clearOwnLivePreview() {
-  if (mySocketId) {
-    delete liveTextPreviews[mySocketId];
-    drawAllLiveTextPreviews();
-  }
-}
 textInputOverlay.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === "Escape") {
     socket.emit("live-text", {
@@ -595,7 +575,8 @@ textInputOverlay.addEventListener("keydown", (e) => {
       color: currentColor,
       size: currentBrushSize,
     });
-    clearOwnLivePreview();
+    delete liveTextPreviews[socket.id];
+    drawAllLiveTextPreviews();
   }
 });
 textInputOverlay.addEventListener("blur", () => {
@@ -606,5 +587,6 @@ textInputOverlay.addEventListener("blur", () => {
     color: currentColor,
     size: currentBrushSize,
   });
-  clearOwnLivePreview();
+  delete liveTextPreviews[socket.id];
+  drawAllLiveTextPreviews();
 });
