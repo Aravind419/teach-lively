@@ -35,8 +35,6 @@ let audioCallActive = false;
 let username = "";
 let isTextMode = false;
 let activeTool = "draw"; // 'draw' or 'text'
-let liveTextPreviews = {};
-let mySocketId = null;
 
 // Mobile menu toggle logic
 const menuToggle = document.getElementById("menuToggle");
@@ -90,7 +88,6 @@ resizeCanvas(); // Initial resize
 
 // Socket.io events
 socket.on("connect", () => {
-  mySocketId = socket.id;
   console.log("Connected to server");
   connectionStatus.textContent = "🟢 Connected";
   connectionStatus.classList.remove("disconnected");
@@ -528,83 +525,3 @@ socket.on("draw-text", (data) => {
 
 // Set default tool on load
 setActiveTool("draw");
-
-// Emit live-text on every input
-textInputOverlay.addEventListener("input", () => {
-  if (activeTool !== "text") return;
-  const input = textInputOverlay.value;
-  // Update your own preview locally
-  liveTextPreviews[mySocketId] = {
-    x: textInputOverlay._canvasX,
-    y: textInputOverlay._canvasY,
-    text: input,
-    color: currentColor,
-    size: currentBrushSize,
-    socketId: mySocketId,
-  };
-  drawAllLiveTextPreviews();
-  socket.emit("live-text", {
-    x: textInputOverlay._canvasX,
-    y: textInputOverlay._canvasY,
-    text: input,
-    color: currentColor,
-    size: currentBrushSize,
-  });
-});
-
-// Render live text previews from other users
-socket.on("live-text", (data) => {
-  if (data.socketId && data.socketId !== mySocketId) {
-    liveTextPreviews[data.socketId] = data;
-    drawAllLiveTextPreviews();
-  }
-});
-
-function drawAllLiveTextPreviews() {
-  redrawLocalStack && redrawLocalStack(); // Redraw base canvas
-  for (const key in liveTextPreviews) {
-    const d = liveTextPreviews[key];
-    if (d.text && d.text.trim() !== "") {
-      ctx.save();
-      ctx.globalAlpha = 0.6;
-      ctx.font = `${d.size * 3}px sans-serif`;
-      ctx.fillStyle = d.color;
-      ctx.textBaseline = "top";
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2;
-      ctx.strokeText(d.text, d.x, d.y);
-      ctx.fillText(d.text, d.x, d.y);
-      ctx.restore();
-    }
-  }
-}
-
-// Remove preview when text is finalized or overlay is hidden
-function clearOwnLivePreview() {
-  if (mySocketId) {
-    delete liveTextPreviews[mySocketId];
-    drawAllLiveTextPreviews();
-  }
-}
-textInputOverlay.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" || e.key === "Escape") {
-    socket.emit("live-text", {
-      x: 0,
-      y: 0,
-      text: "",
-      color: currentColor,
-      size: currentBrushSize,
-    });
-    clearOwnLivePreview();
-  }
-});
-textInputOverlay.addEventListener("blur", () => {
-  socket.emit("live-text", {
-    x: 0,
-    y: 0,
-    text: "",
-    color: currentColor,
-    size: currentBrushSize,
-  });
-  clearOwnLivePreview();
-});
