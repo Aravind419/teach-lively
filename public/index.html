@@ -8,6 +8,19 @@
   </head>
   <body>
     <div class="navbar">
+      <button
+        id="themeToggle"
+        title="Toggle theme"
+        style="
+          background: none;
+          border: none;
+          color: inherit;
+          font-size: 1.5em;
+          cursor: pointer;
+          margin-right: 10px;
+        ">
+        🌙
+      </button>
       <h1>For Loved one❤️</h1>
       <span id="connectionStatus" class="status-indicator disconnected"
         >🔴 Disconnected</span
@@ -18,6 +31,7 @@
     <div class="main-content">
       <div class="control-panel" id="controlPanel">
         <div class="color-picker">
+          <span title="Color">🎨</span>
           <input
             type="color"
             id="colorPicker"
@@ -25,6 +39,7 @@
             title="Choose drawing color" />
         </div>
         <div class="brush-size-selector">
+          <span title="Brush Size">🖌️</span>
           <label for="brushSize">Brush Size:</label>
           <select id="brushSize">
             <option value="5">Small</option>
@@ -32,34 +47,30 @@
             <option value="20">Large</option>
           </select>
         </div>
-        <div class="tool-group">
-          <button id="textToolBtn">Text ✏️</button>
-          <button id="drawToolBtn">Draw 🖌️</button>
-        </div>
-        <button id="clearCanvas">Clear Canvas</button>
-        <button id="saveImage">Save as Image</button>
-        <button id="printBtn">Print / Share</button>
-        <button id="startAudioCall">Start Audio Call</button>
+        <button id="clearCanvas">
+          <span title="Clear">🧹</span> Clear Canvas
+        </button>
+        <button id="saveImage">
+          <span title="Save">💾</span> Save as Image
+        </button>
+        <button id="printBtn">
+          <span title="Print/Share">🖨️</span> Print / Share
+        </button>
+        <button id="startAudioCall">
+          <span title="Audio">🔊</span> Start Audio Call
+        </button>
         <button id="stopAudioCall" style="display: none">
-          Stop Audio Call
+          <span title="Stop Audio">🔇</span> Stop Audio Call
         </button>
       </div>
       <canvas id="whiteboard"></canvas>
-      <input
-        id="textInputOverlay"
-        type="text"
-        style="
-          position: absolute;
-          display: none;
-          z-index: 1001;
-          font-size: 24px;
-          border: 2px solid #007bff;
-          border-radius: 4px;
-          padding: 2px 6px;
-          background: white;
-        "
-        maxlength="100"
-        autocomplete="off" />
+      <button
+        id="mobileMoreBtn"
+        class="mobile-more-btn"
+        aria-label="More"
+        title="More">
+        ☰
+      </button>
     </div>
 
     <!-- Username Modal -->

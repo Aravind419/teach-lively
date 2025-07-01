@@ -20,9 +20,8 @@ const registerBtn = document.getElementById("registerBtn");
 const modalTitle = document.getElementById("modalTitle");
 const loginError = document.getElementById("loginError");
 const printBtn = document.getElementById("printBtn");
-const textToolBtn = document.getElementById("textToolBtn");
-const textInputOverlay = document.getElementById("textInputOverlay");
-const drawToolBtn = document.getElementById("drawToolBtn");
+const themeToggle = document.getElementById("themeToggle");
+const mobileMoreBtn = document.getElementById("mobileMoreBtn");
 
 let isDrawing = false;
 let lastX = 0;
@@ -33,8 +32,6 @@ let localStream = null;
 let peer = null;
 let audioCallActive = false;
 let username = "";
-let isTextMode = false;
-let activeTool = "draw"; // 'draw' or 'text'
 
 // Mobile menu toggle logic
 const menuToggle = document.getElementById("menuToggle");
@@ -131,29 +128,13 @@ function drawLine(x0, y0, x1, y1, color, size) {
   ctx.stroke();
 }
 
-function setActiveTool(tool) {
-  activeTool = tool;
-  if (tool === "draw") {
-    isTextMode = false;
-    textToolBtn.classList.remove("active");
-    drawToolBtn.classList.add("active");
-    canvas.style.cursor = "crosshair";
-  } else if (tool === "text") {
-    isTextMode = true;
-    textToolBtn.classList.add("active");
-    drawToolBtn.classList.remove("active");
-    canvas.style.cursor = "text";
-  }
-}
-
-// Only allow drawing when draw tool is active
 canvas.addEventListener("mousedown", (e) => {
-  if (activeTool !== "draw") return;
   isDrawing = true;
   [lastX, lastY] = [e.offsetX, e.offsetY];
 });
+
 canvas.addEventListener("mousemove", (e) => {
-  if (activeTool !== "draw" || !isDrawing) return;
+  if (!isDrawing) return;
   const x1 = e.offsetX;
   const y1 = e.offsetY;
   drawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize);
@@ -167,12 +148,12 @@ canvas.addEventListener("mousemove", (e) => {
   });
   [lastX, lastY] = [x1, y1];
 });
+
 canvas.addEventListener("mouseup", () => {
-  if (activeTool !== "draw") return;
   isDrawing = false;
 });
+
 canvas.addEventListener("mouseout", () => {
-  if (activeTool !== "draw") return;
   isDrawing = false;
 });
 
@@ -443,230 +424,75 @@ canvas.addEventListener("touchcancel", () => {
   isDrawing = false;
 });
 
-if (textToolBtn) {
-  textToolBtn.addEventListener("click", () => {
-    setActiveTool("text");
-    autoCloseMenu && autoCloseMenu();
+// Theme toggle logic
+if (themeToggle) {
+  // Set initial theme from localStorage or system preference
+  function setTheme(dark) {
+    document.body.classList.toggle("dark", dark);
+    themeToggle.textContent = dark ? "☀️" : "🌙";
+  }
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const savedTheme = localStorage.getItem("theme");
+  let darkMode = savedTheme === "dark" || (savedTheme === null && prefersDark);
+  setTheme(darkMode);
+  themeToggle.addEventListener("click", () => {
+    darkMode = !document.body.classList.contains("dark");
+    setTheme(darkMode);
+    localStorage.setItem("theme", darkMode ? "dark" : "light");
   });
 }
-if (drawToolBtn) {
-  drawToolBtn.addEventListener("click", () => {
-    setActiveTool("draw");
-    autoCloseMenu && autoCloseMenu();
+
+// Mobile drawer logic
+if (mobileMoreBtn && controlPanel) {
+  function isMobile() {
+    return window.innerWidth <= 700;
+  }
+  function openDrawer() {
+    controlPanel.classList.add("open");
+  }
+  function closeDrawer() {
+    controlPanel.classList.remove("open");
+  }
+  mobileMoreBtn.addEventListener("click", () => {
+    if (controlPanel.classList.contains("open")) {
+      closeDrawer();
+    } else {
+      openDrawer();
+    }
   });
-}
-
-// Text tool overlay logic
-canvas.addEventListener("click", (e) => {
-  if (activeTool !== "text") return;
-  // Position the overlay input
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  textInputOverlay.style.left = `${rect.left + x - 2}px`;
-  textInputOverlay.style.top = `${rect.top + y - 12}px`;
-  textInputOverlay.style.fontSize = `${currentBrushSize * 3}px`;
-  textInputOverlay.style.color = currentColor;
-  textInputOverlay.value = "";
-  textInputOverlay.style.display = "block";
-  textInputOverlay.focus();
-  // Store position for later
-  textInputOverlay._canvasX = x;
-  textInputOverlay._canvasY = y;
-});
-
-textInputOverlay.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    const input = textInputOverlay.value;
-    if (input && input.trim() !== "") {
-      drawText(
-        textInputOverlay._canvasX,
-        textInputOverlay._canvasY,
-        input,
-        currentColor,
-        currentBrushSize
-      );
-      socket.emit("draw-text", {
-        x: textInputOverlay._canvasX,
-        y: textInputOverlay._canvasY,
-        text: input,
-        color: currentColor,
-        size: currentBrushSize,
-      });
+  // Close drawer when clicking outside
+  document.addEventListener("click", (e) => {
+    if (
+      isMobile() &&
+      controlPanel.classList.contains("open") &&
+      !controlPanel.contains(e.target) &&
+      e.target !== mobileMoreBtn
+    ) {
+      closeDrawer();
     }
-    textInputOverlay.style.display = "none";
-  } else if (e.key === "Escape") {
-    textInputOverlay.style.display = "none";
-  }
-});
-
-// Hide overlay if clicking elsewhere
-canvas.addEventListener("mousedown", (e) => {
-  if (activeTool !== "text") textInputOverlay.style.display = "none";
-});
-document.body.addEventListener("mousedown", (e) => {
-  if (e.target !== textInputOverlay && e.target !== canvas) {
-    textInputOverlay.style.display = "none";
-  }
-});
-
-function drawText(x, y, text, color, size) {
-  ctx.save();
-  ctx.font = `${size * 3}px sans-serif`;
-  ctx.fillStyle = color;
-  ctx.textBaseline = "top";
-  ctx.fillText(text, x, y);
-  ctx.restore();
-}
-
-socket.on("draw-text", (data) => {
-  drawText(data.x, data.y, data.text, data.color, data.size);
-});
-
-// Set default tool on load
-setActiveTool("draw");
-
-// HiDPI/Pixel Density support
-function setupHiDPICanvas(canvas, ctx) {
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset
-  ctx.scale(dpr, dpr);
-}
-
-let offsetX = 0;
-let offsetY = 0;
-let isPanning = false;
-let panStart = { x: 0, y: 0 };
-let panOrigin = { x: 0, y: 0 };
-
-function redrawAll() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // Redraw all actions here (drawings, texts, etc.)
-  // You may need to keep a stack of actions for this to work fully.
-  // For now, this is a placeholder for where you would redraw everything with offsetX/offsetY applied.
-}
-
-canvas.addEventListener("mousedown", (e) => {
-  if (activeTool === "draw") {
-    isDrawing = true;
-    [lastX, lastY] = [e.offsetX - offsetX, e.offsetY - offsetY];
-  } else if (activeTool !== "text") {
-    isPanning = true;
-    panStart = { x: e.clientX, y: e.clientY };
-    panOrigin = { x: offsetX, y: offsetY };
-    canvas.style.cursor = "grab";
-  }
-});
-canvas.addEventListener("mousemove", (e) => {
-  if (activeTool === "draw" && isDrawing) {
-    const x1 = e.offsetX - offsetX;
-    const y1 = e.offsetY - offsetY;
-    drawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize);
-    socket.emit("draw", {
-      x0: lastX,
-      y0: lastY,
-      x1: x1,
-      y1: y1,
-      color: currentColor,
-      size: currentBrushSize,
-    });
-    [lastX, lastY] = [x1, y1];
-  } else if (isPanning) {
-    offsetX = panOrigin.x + (e.clientX - panStart.x);
-    offsetY = panOrigin.y + (e.clientY - panStart.y);
-    redrawAll();
-    socket.emit("pan", { offsetX, offsetY });
-  }
-});
-canvas.addEventListener("mouseup", () => {
-  isDrawing = false;
-  isPanning = false;
-  canvas.style.cursor =
-    activeTool === "draw"
-      ? "crosshair"
-      : activeTool === "text"
-      ? "text"
-      : "grab";
-});
-canvas.addEventListener("mouseout", () => {
-  isDrawing = false;
-  isPanning = false;
-});
-
-// Touch support for panning
-canvas.addEventListener("touchstart", (e) => {
-  if (activeTool !== "draw" && e.touches.length === 1) {
-    isPanning = true;
-    panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    panOrigin = { x: offsetX, y: offsetY };
-  }
-});
-canvas.addEventListener("touchmove", (e) => {
-  if (isPanning && e.touches.length === 1) {
-    offsetX = panOrigin.x + (e.touches[0].clientX - panStart.x);
-    offsetY = panOrigin.y + (e.touches[0].clientY - panStart.y);
-    redrawAll();
-    socket.emit("pan", { offsetX, offsetY });
-  }
-});
-canvas.addEventListener("touchend", () => {
-  isPanning = false;
-});
-
-// Pan sync
-socket.on("pan", ({ offsetX: newX, offsetY: newY }) => {
-  offsetX = newX;
-  offsetY = newY;
-  redrawAll();
-});
-
-// Fix local text rendering: draw immediately on Enter
-textInputOverlay.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    const input = textInputOverlay.value;
-    if (input && input.trim() !== "") {
-      drawText(
-        textInputOverlay._canvasX - offsetX,
-        textInputOverlay._canvasY - offsetY,
-        input,
-        currentColor,
-        currentBrushSize
-      );
-      socket.emit("draw-text", {
-        x: textInputOverlay._canvasX - offsetX,
-        y: textInputOverlay._canvasY - offsetY,
-        text: input,
-        color: currentColor,
-        size: currentBrushSize,
-      });
+  });
+  // Auto-close drawer after action
+  [
+    colorPicker,
+    brushSizeSelector,
+    clearCanvasBtn,
+    saveImageBtn,
+    printBtn,
+    startAudioCallBtn,
+    stopAudioCallBtn,
+  ].forEach((el) => {
+    if (el) el.addEventListener("change", () => isMobile() && closeDrawer());
+    if (el) el.addEventListener("click", () => isMobile() && closeDrawer());
+  });
+  // Hide control panel by default on mobile
+  function updatePanelVisibility() {
+    if (isMobile()) {
+      closeDrawer();
+    } else {
+      controlPanel.classList.remove("open");
+      controlPanel.style.transform = "";
     }
-    textInputOverlay.style.display = "none";
-  } else if (e.key === "Escape") {
-    textInputOverlay.style.display = "none";
   }
-});
-
-// Update drawLine and drawText to use offsetX/offsetY
-function drawLine(x0, y0, x1, y1, color, size) {
-  ctx.beginPath();
-  ctx.moveTo(x0 + offsetX, y0 + offsetY);
-  ctx.lineTo(x1 + offsetX, y1 + offsetY);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = size;
-  ctx.lineCap = "round";
-  ctx.stroke();
+  window.addEventListener("resize", updatePanelVisibility);
+  updatePanelVisibility();
 }
-function drawText(x, y, text, color, size) {
-  ctx.save();
-  ctx.font = `${size * 3}px sans-serif`;
-  ctx.fillStyle = color;
-  ctx.textBaseline = "top";
-  ctx.fillText(text, x + offsetX, y + offsetY);
-  ctx.restore();
-}
-// On window resize, update HiDPI canvas
-window.addEventListener("resize", () => setupHiDPICanvas(canvas, ctx));
-setupHiDPICanvas(canvas, ctx);
