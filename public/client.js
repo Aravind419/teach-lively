@@ -20,6 +20,10 @@ const registerBtn = document.getElementById("registerBtn");
 const modalTitle = document.getElementById("modalTitle");
 const loginError = document.getElementById("loginError");
 const printBtn = document.getElementById("printBtn");
+const textToolBtn = document.getElementById("textToolBtn");
+const textInputOverlay = document.getElementById("textInputOverlay");
+const drawToolBtn = document.getElementById("drawToolBtn");
+const eraserToolBtn = document.getElementById("eraserToolBtn");
 
 let isDrawing = false;
 let lastX = 0;
@@ -30,6 +34,10 @@ let localStream = null;
 let peer = null;
 let audioCallActive = false;
 let username = "";
+let isTextMode = false;
+let activeTool = "draw"; // 'draw', 'text', or 'eraser'
+let liveTextPreviews = {};
+let mySocketId = null;
 
 // Mobile menu toggle logic
 const menuToggle = document.getElementById("menuToggle");
@@ -83,6 +91,7 @@ resizeCanvas(); // Initial resize
 
 // Socket.io events
 socket.on("connect", () => {
+  mySocketId = socket.id;
   console.log("Connected to server");
   connectionStatus.textContent = "🟢 Connected";
   connectionStatus.classList.remove("disconnected");
@@ -97,6 +106,9 @@ socket.on("disconnect", () => {
   connectionStatus.textContent = "🔴 Disconnected";
   connectionStatus.classList.remove("connected");
   connectionStatus.classList.add("disconnected");
+  alert(
+    "You have been disconnected. If you were on a call, please reconnect manually."
+  );
 });
 
 socket.on("userConnected", (count) => {
@@ -116,7 +128,7 @@ socket.on("clear", () => {
 });
 
 // Drawing functions
-function drawLine(x0, y0, x1, y1, color, size) {
+function drawLine(x0, y0, x1, y1, color, size, skipStack) {
   ctx.beginPath();
   ctx.moveTo(x0, y0);
   ctx.lineTo(x1, y1);
@@ -124,34 +136,68 @@ function drawLine(x0, y0, x1, y1, color, size) {
   ctx.lineWidth = size;
   ctx.lineCap = "round";
   ctx.stroke();
+  if (!skipStack)
+    pushLocalAction &&
+      pushLocalAction({ type: "draw", x0, y0, x1, y1, color, size });
+  saveCanvasToLocal();
 }
 
+function setActiveTool(tool) {
+  activeTool = tool;
+  isTextMode = tool === "text";
+  textToolBtn.classList.toggle("active", tool === "text");
+  drawToolBtn.classList.toggle("active", tool === "draw");
+  eraserToolBtn.classList.toggle("active", tool === "eraser");
+  if (tool === "draw") {
+    canvas.style.cursor = "crosshair";
+  } else if (tool === "text") {
+    canvas.style.cursor = "text";
+  } else if (tool === "eraser") {
+    canvas.style.cursor = "cell";
+  }
+}
+
+// Only allow drawing when draw tool is active
 canvas.addEventListener("mousedown", (e) => {
+  if (activeTool !== "draw" && activeTool !== "eraser") return;
   isDrawing = true;
   [lastX, lastY] = [e.offsetX, e.offsetY];
 });
-
 canvas.addEventListener("mousemove", (e) => {
-  if (!isDrawing) return;
+  if ((activeTool !== "draw" && activeTool !== "eraser") || !isDrawing) return;
   const x1 = e.offsetX;
   const y1 = e.offsetY;
-  drawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize);
-  socket.emit("draw", {
-    x0: lastX,
-    y0: lastY,
-    x1: x1,
-    y1: y1,
-    color: currentColor,
-    size: currentBrushSize,
-  });
+  if (activeTool === "eraser") {
+    drawLine(lastX, lastY, x1, y1, "#fff", currentBrushSize * 2, true);
+    socket.emit("draw", {
+      x0: lastX,
+      y0: lastY,
+      x1: x1,
+      y1: y1,
+      color: "#fff",
+      size: currentBrushSize * 2,
+      eraser: true,
+    });
+  } else {
+    drawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize, true);
+    socket.emit("draw", {
+      x0: lastX,
+      y0: lastY,
+      x1: x1,
+      y1: y1,
+      color: currentColor,
+      size: currentBrushSize,
+    });
+  }
   [lastX, lastY] = [x1, y1];
+  saveCanvasToLocal();
 });
-
 canvas.addEventListener("mouseup", () => {
+  if (activeTool !== "draw" && activeTool !== "eraser") return;
   isDrawing = false;
 });
-
 canvas.addEventListener("mouseout", () => {
+  if (activeTool !== "draw" && activeTool !== "eraser") return;
   isDrawing = false;
 });
 
@@ -166,7 +212,9 @@ brushSizeSelector.addEventListener("change", (e) => {
 
 clearCanvasBtn.addEventListener("click", () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  pushLocalAction && pushLocalAction({ type: "clear" });
   socket.emit("clear");
+  saveCanvasToLocal();
 });
 
 // Audio call logic
@@ -421,3 +469,195 @@ canvas.addEventListener("touchend", () => {
 canvas.addEventListener("touchcancel", () => {
   isDrawing = false;
 });
+
+if (textToolBtn) {
+  textToolBtn.addEventListener("click", () => {
+    setActiveTool("text");
+    autoCloseMenu && autoCloseMenu();
+  });
+}
+if (drawToolBtn) {
+  drawToolBtn.addEventListener("click", () => {
+    setActiveTool("draw");
+    autoCloseMenu && autoCloseMenu();
+  });
+}
+if (eraserToolBtn) {
+  eraserToolBtn.addEventListener("click", () => {
+    setActiveTool("eraser");
+    autoCloseMenu && autoCloseMenu();
+  });
+}
+
+// Text tool overlay logic
+canvas.addEventListener("click", (e) => {
+  if (activeTool !== "text") return;
+  // Position the overlay input
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  textInputOverlay.style.left = `${rect.left + x - 2}px`;
+  textInputOverlay.style.top = `${rect.top + y - 12}px`;
+  textInputOverlay.style.fontSize = `${currentBrushSize * 3}px`;
+  textInputOverlay.style.color = currentColor;
+  textInputOverlay.value = "";
+  textInputOverlay.style.display = "block";
+  textInputOverlay.focus();
+  // Store position for later
+  textInputOverlay._canvasX = x;
+  textInputOverlay._canvasY = y;
+});
+
+textInputOverlay.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    const input = textInputOverlay.value;
+    if (input && input.trim() !== "") {
+      drawText(
+        textInputOverlay._canvasX,
+        textInputOverlay._canvasY,
+        input,
+        currentColor,
+        currentBrushSize
+      );
+      socket.emit("draw-text", {
+        x: textInputOverlay._canvasX,
+        y: textInputOverlay._canvasY,
+        text: input,
+        color: currentColor,
+        size: currentBrushSize,
+      });
+    }
+    textInputOverlay.style.display = "none";
+  } else if (e.key === "Escape") {
+    textInputOverlay.style.display = "none";
+  }
+});
+
+// Hide overlay if clicking elsewhere
+canvas.addEventListener("mousedown", (e) => {
+  if (activeTool !== "text") textInputOverlay.style.display = "none";
+});
+document.body.addEventListener("mousedown", (e) => {
+  if (e.target !== textInputOverlay && e.target !== canvas) {
+    textInputOverlay.style.display = "none";
+  }
+});
+
+function drawText(x, y, text, color, size, skipStack) {
+  ctx.save();
+  ctx.font = `${size * 3}px sans-serif`;
+  ctx.fillStyle = color;
+  ctx.textBaseline = "top";
+  ctx.fillText(text, x, y);
+  ctx.restore();
+  if (!skipStack)
+    pushLocalAction &&
+      pushLocalAction({ type: "text", x, y, text, color, size });
+  saveCanvasToLocal();
+}
+
+socket.on("draw-text", (data) => {
+  drawText(data.x, data.y, data.text, data.color, data.size);
+});
+
+// Set default tool on load
+setActiveTool("draw");
+
+// Emit live-text on every input
+textInputOverlay.addEventListener("input", () => {
+  if (activeTool !== "text") return;
+  const input = textInputOverlay.value;
+  // Update your own preview locally
+  liveTextPreviews[mySocketId] = {
+    x: textInputOverlay._canvasX,
+    y: textInputOverlay._canvasY,
+    text: input,
+    color: currentColor,
+    size: currentBrushSize,
+    socketId: mySocketId,
+  };
+  drawAllLiveTextPreviews();
+  socket.emit("live-text", {
+    x: textInputOverlay._canvasX,
+    y: textInputOverlay._canvasY,
+    text: input,
+    color: currentColor,
+    size: currentBrushSize,
+  });
+});
+
+// Render live text previews from other users
+socket.on("live-text", (data) => {
+  if (data.socketId && data.socketId !== mySocketId) {
+    liveTextPreviews[data.socketId] = data;
+    drawAllLiveTextPreviews();
+  }
+});
+
+function drawAllLiveTextPreviews() {
+  redrawLocalStack && redrawLocalStack(); // Redraw base canvas
+  for (const key in liveTextPreviews) {
+    const d = liveTextPreviews[key];
+    if (d.text && d.text.trim() !== "") {
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      ctx.font = `${d.size * 3}px sans-serif`;
+      ctx.fillStyle = d.color;
+      ctx.textBaseline = "top";
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.strokeText(d.text, d.x, d.y);
+      ctx.fillText(d.text, d.x, d.y);
+      ctx.restore();
+    }
+  }
+}
+
+// Remove preview when text is finalized or overlay is hidden
+function clearOwnLivePreview() {
+  if (mySocketId) {
+    delete liveTextPreviews[mySocketId];
+    drawAllLiveTextPreviews();
+  }
+}
+textInputOverlay.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === "Escape") {
+    socket.emit("live-text", {
+      x: 0,
+      y: 0,
+      text: "",
+      color: currentColor,
+      size: currentBrushSize,
+    });
+    clearOwnLivePreview();
+  }
+});
+textInputOverlay.addEventListener("blur", () => {
+  socket.emit("live-text", {
+    x: 0,
+    y: 0,
+    text: "",
+    color: currentColor,
+    size: currentBrushSize,
+  });
+  clearOwnLivePreview();
+});
+
+function saveCanvasToLocal() {
+  try {
+    const dataURL = canvas.toDataURL();
+    localStorage.setItem("doodle-canvas-" + roomId, dataURL);
+  } catch (e) {}
+}
+function restoreCanvasFromLocal() {
+  const dataURL = localStorage.getItem("doodle-canvas-" + roomId);
+  if (dataURL) {
+    const img = new window.Image();
+    img.onload = function () {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = dataURL;
+  }
+}
+window.addEventListener("DOMContentLoaded", restoreCanvasFromLocal);

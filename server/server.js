@@ -152,6 +152,18 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("draw-text", (data) => {
+    socket.broadcast.emit("draw-text", data);
+  });
+
+  socket.on("live-text", (data) => {
+    if (currentRoom) {
+      socket
+        .to(currentRoom)
+        .emit("live-text", { ...data, socketId: socket.id });
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("User disconnected");
     delete userNames[socket.id];
