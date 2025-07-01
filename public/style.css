@@ -215,6 +215,39 @@ canvas {
   .menu-toggle {
     display: none;
   }
+  .navbar {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding: 8px 6px !important;
+    gap: 10px !important;
+  }
+  .navbar > * {
+    margin-right: 8px !important;
+  }
+  .navbar h1 {
+    display: none !important;
+  }
+  #themeToggle {
+    font-size: 1.2em !important;
+    margin-right: 6px !important;
+  }
+  .status-indicator {
+    font-size: 0.95em !important;
+    margin: 0 8px !important;
+    padding: 4px 10px !important;
+    min-width: 90px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  .user-list {
+    font-size: 0.95em !important;
+    margin: 0 0 0 8px !important;
+    font-weight: 600 !important;
+    color: #fff !important;
+    white-space: nowrap !important;
+  }
 }
 
 /* Icon style for control panel */
