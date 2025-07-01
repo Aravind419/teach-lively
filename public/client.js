@@ -23,7 +23,6 @@ const printBtn = document.getElementById("printBtn");
 const textToolBtn = document.getElementById("textToolBtn");
 const textInputOverlay = document.getElementById("textInputOverlay");
 const drawToolBtn = document.getElementById("drawToolBtn");
-const eraserToolBtn = document.getElementById("eraserToolBtn");
 
 let isDrawing = false;
 let lastX = 0;
@@ -35,7 +34,7 @@ let peer = null;
 let audioCallActive = false;
 let username = "";
 let isTextMode = false;
-let activeTool = "draw"; // 'draw', 'text', or 'eraser'
+let activeTool = "draw"; // 'draw' or 'text'
 let liveTextPreviews = {};
 let mySocketId = null;
 
@@ -106,9 +105,6 @@ socket.on("disconnect", () => {
   connectionStatus.textContent = "🔴 Disconnected";
   connectionStatus.classList.remove("connected");
   connectionStatus.classList.add("disconnected");
-  alert(
-    "You have been disconnected. If you were on a call, please reconnect manually."
-  );
 });
 
 socket.on("userConnected", (count) => {
@@ -128,7 +124,7 @@ socket.on("clear", () => {
 });
 
 // Drawing functions
-function drawLine(x0, y0, x1, y1, color, size, skipStack) {
+function drawLine(x0, y0, x1, y1, color, size) {
   ctx.beginPath();
   ctx.moveTo(x0, y0);
   ctx.lineTo(x1, y1);
@@ -136,68 +132,50 @@ function drawLine(x0, y0, x1, y1, color, size, skipStack) {
   ctx.lineWidth = size;
   ctx.lineCap = "round";
   ctx.stroke();
-  if (!skipStack)
-    pushLocalAction &&
-      pushLocalAction({ type: "draw", x0, y0, x1, y1, color, size });
-  saveCanvasToLocal();
 }
 
 function setActiveTool(tool) {
   activeTool = tool;
-  isTextMode = tool === "text";
-  textToolBtn.classList.toggle("active", tool === "text");
-  drawToolBtn.classList.toggle("active", tool === "draw");
-  eraserToolBtn.classList.toggle("active", tool === "eraser");
   if (tool === "draw") {
+    isTextMode = false;
+    textToolBtn.classList.remove("active");
+    drawToolBtn.classList.add("active");
     canvas.style.cursor = "crosshair";
   } else if (tool === "text") {
+    isTextMode = true;
+    textToolBtn.classList.add("active");
+    drawToolBtn.classList.remove("active");
     canvas.style.cursor = "text";
-  } else if (tool === "eraser") {
-    canvas.style.cursor = "cell";
   }
 }
 
 // Only allow drawing when draw tool is active
 canvas.addEventListener("mousedown", (e) => {
-  if (activeTool !== "draw" && activeTool !== "eraser") return;
+  if (activeTool !== "draw") return;
   isDrawing = true;
   [lastX, lastY] = [e.offsetX, e.offsetY];
 });
 canvas.addEventListener("mousemove", (e) => {
-  if ((activeTool !== "draw" && activeTool !== "eraser") || !isDrawing) return;
+  if (activeTool !== "draw" || !isDrawing) return;
   const x1 = e.offsetX;
   const y1 = e.offsetY;
-  if (activeTool === "eraser") {
-    drawLine(lastX, lastY, x1, y1, "#fff", currentBrushSize * 2, true);
-    socket.emit("draw", {
-      x0: lastX,
-      y0: lastY,
-      x1: x1,
-      y1: y1,
-      color: "#fff",
-      size: currentBrushSize * 2,
-      eraser: true,
-    });
-  } else {
-    drawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize, true);
-    socket.emit("draw", {
-      x0: lastX,
-      y0: lastY,
-      x1: x1,
-      y1: y1,
-      color: currentColor,
-      size: currentBrushSize,
-    });
-  }
+  drawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize);
+  socket.emit("draw", {
+    x0: lastX,
+    y0: lastY,
+    x1: x1,
+    y1: y1,
+    color: currentColor,
+    size: currentBrushSize,
+  });
   [lastX, lastY] = [x1, y1];
-  saveCanvasToLocal();
 });
 canvas.addEventListener("mouseup", () => {
-  if (activeTool !== "draw" && activeTool !== "eraser") return;
+  if (activeTool !== "draw") return;
   isDrawing = false;
 });
 canvas.addEventListener("mouseout", () => {
-  if (activeTool !== "draw" && activeTool !== "eraser") return;
+  if (activeTool !== "draw") return;
   isDrawing = false;
 });
 
@@ -212,9 +190,7 @@ brushSizeSelector.addEventListener("change", (e) => {
 
 clearCanvasBtn.addEventListener("click", () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  pushLocalAction && pushLocalAction({ type: "clear" });
   socket.emit("clear");
-  saveCanvasToLocal();
 });
 
 // Audio call logic
@@ -482,12 +458,6 @@ if (drawToolBtn) {
     autoCloseMenu && autoCloseMenu();
   });
 }
-if (eraserToolBtn) {
-  eraserToolBtn.addEventListener("click", () => {
-    setActiveTool("eraser");
-    autoCloseMenu && autoCloseMenu();
-  });
-}
 
 // Text tool overlay logic
 canvas.addEventListener("click", (e) => {
@@ -543,17 +513,13 @@ document.body.addEventListener("mousedown", (e) => {
   }
 });
 
-function drawText(x, y, text, color, size, skipStack) {
+function drawText(x, y, text, color, size) {
   ctx.save();
   ctx.font = `${size * 3}px sans-serif`;
   ctx.fillStyle = color;
   ctx.textBaseline = "top";
   ctx.fillText(text, x, y);
   ctx.restore();
-  if (!skipStack)
-    pushLocalAction &&
-      pushLocalAction({ type: "text", x, y, text, color, size });
-  saveCanvasToLocal();
 }
 
 socket.on("draw-text", (data) => {
@@ -642,22 +608,3 @@ textInputOverlay.addEventListener("blur", () => {
   });
   clearOwnLivePreview();
 });
-
-function saveCanvasToLocal() {
-  try {
-    const dataURL = canvas.toDataURL();
-    localStorage.setItem("doodle-canvas-" + roomId, dataURL);
-  } catch (e) {}
-}
-function restoreCanvasFromLocal() {
-  const dataURL = localStorage.getItem("doodle-canvas-" + roomId);
-  if (dataURL) {
-    const img = new window.Image();
-    img.onload = function () {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-    };
-    img.src = dataURL;
-  }
-}
-window.addEventListener("DOMContentLoaded", restoreCanvasFromLocal);
