@@ -17,6 +17,7 @@
   "author": "Aravind & Chaitra",
   "license": "MIT",
   "dependencies": {
+    "dotenv": "^17.0.1",
     "express": "^4.18.2",
     "mongodb": "^6.17.0",
     "simple-peer": "^9.11.1",

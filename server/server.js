@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
@@ -10,6 +11,12 @@ const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
 const MONGO_URL = process.env.MONGO_URL;
+if (!MONGO_URL) {
+  console.error(
+    "ERROR: MONGO_URL environment variable is not set. Please set it to your MongoDB connection string."
+  );
+  process.exit(1);
+}
 const DB_NAME = "doodletogether";
 let drawingsCollection;
 let usersCollection;
