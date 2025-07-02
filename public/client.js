@@ -137,67 +137,86 @@ function drawLine(x0, y0, x1, y1, color, size) {
   ctx.stroke();
 }
 
+// --- Accurate coordinate mapping ---
+function getCanvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  let x, y;
+  if (e.touches && e.touches.length > 0) {
+    x = e.touches[0].clientX - rect.left;
+    y = e.touches[0].clientY - rect.top;
+  } else {
+    x = e.clientX - rect.left;
+    y = e.clientY - rect.top;
+  }
+  x *= canvas.width / rect.width;
+  y *= canvas.height / rect.height;
+  return { x, y };
+}
+
+// --- Redraw everything ---
+function redrawEverything() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  redrawAllImages();
+  // Optionally: redraw other canvas content here (e.g., lines from localStorage)
+}
+
+// --- Patch all event listeners to use getCanvasCoords and redrawEverything ---
 canvas.addEventListener("mousedown", (e) => {
+  const { x, y } = getCanvasCoords(e);
   if (tempImage) {
-    // Check if user clicked resize handle
     if (
-      e.offsetX > tempImageX + tempImageW - resizeHandleSize &&
-      e.offsetX < tempImageX + tempImageW + resizeHandleSize &&
-      e.offsetY > tempImageY + tempImageH - resizeHandleSize &&
-      e.offsetY < tempImageY + tempImageH + resizeHandleSize
+      x > tempImageX + tempImageW - resizeHandleSize &&
+      x < tempImageX + tempImageW + resizeHandleSize &&
+      y > tempImageY + tempImageH - resizeHandleSize &&
+      y < tempImageY + tempImageH + resizeHandleSize
     ) {
       resizingImage = true;
-      dragOffsetX = e.offsetX - (tempImageX + tempImageW);
-      dragOffsetY = e.offsetY - (tempImageY + tempImageH);
+      dragOffsetX = x - (tempImageX + tempImageW);
+      dragOffsetY = y - (tempImageY + tempImageH);
       return;
     }
-    // Check if user clicked inside image
     if (
-      e.offsetX > tempImageX &&
-      e.offsetX < tempImageX + tempImageW &&
-      e.offsetY > tempImageY &&
-      e.offsetY < tempImageY + tempImageH
+      x > tempImageX &&
+      x < tempImageX + tempImageW &&
+      y > tempImageY &&
+      y < tempImageY + tempImageH
     ) {
       draggingImage = true;
-      dragOffsetX = e.offsetX - tempImageX;
-      dragOffsetY = e.offsetY - tempImageY;
+      dragOffsetX = x - tempImageX;
+      dragOffsetY = y - tempImageY;
       return;
     }
   }
   isDrawing = true;
-  [lastX, lastY] = [e.offsetX, e.offsetY];
+  [lastX, lastY] = [x, y];
 });
 
 canvas.addEventListener("mousemove", (e) => {
+  const { x, y } = getCanvasCoords(e);
   if (draggingImage && tempImage) {
-    tempImageX = e.offsetX - dragOffsetX;
-    tempImageY = e.offsetY - dragOffsetY;
+    tempImageX = x - dragOffsetX;
+    tempImageY = y - dragOffsetY;
     drawTempImage();
   } else if (resizingImage && tempImage) {
-    tempImageW = Math.max(30, e.offsetX - tempImageX);
-    tempImageH = Math.max(30, e.offsetY - tempImageY);
+    tempImageW = Math.max(30, x - tempImageX);
+    tempImageH = Math.max(30, y - tempImageY);
     drawTempImage();
   } else if (!isDrawing) return;
-  const x1 = e.offsetX;
-  const y1 = e.offsetY;
-  saveAndDrawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize);
+  saveAndDrawLine(lastX, lastY, x, y, currentColor, currentBrushSize);
   socket.emit("draw", {
     x0: lastX,
     y0: lastY,
-    x1: x1,
-    y1: y1,
+    x1: x,
+    y1: y,
     color: currentColor,
     size: currentBrushSize,
   });
-  [lastX, lastY] = [x1, y1];
+  [lastX, lastY] = [x, y];
 });
 
 canvas.addEventListener("mouseup", (e) => {
-  if (draggingImage || resizingImage) {
-    draggingImage = false;
-    resizingImage = false;
-    return;
-  }
+  draggingImage = false;
+  resizingImage = false;
   isDrawing = false;
 });
 
@@ -449,32 +468,26 @@ if (printBtn) {
 
 // --- Touch support for drawing on mobile ---
 canvas.addEventListener("touchstart", (e) => {
-  if (e.touches.length === 1) {
-    isDrawing = true;
-    const rect = canvas.getBoundingClientRect();
-    lastX = e.touches[0].clientX - rect.left;
-    lastY = e.touches[0].clientY - rect.top;
-  }
+  const { x, y } = getCanvasCoords(e);
+  isDrawing = true;
+  [lastX, lastY] = [x, y];
 });
 canvas.addEventListener(
   "touchmove",
   (e) => {
-    if (!isDrawing || e.touches.length !== 1) return;
     e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const x1 = e.touches[0].clientX - rect.left;
-    const y1 = e.touches[0].clientY - rect.top;
-    drawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize);
+    const { x, y } = getCanvasCoords(e);
+    if (!isDrawing) return;
+    saveAndDrawLine(lastX, lastY, x, y, currentColor, currentBrushSize);
     socket.emit("draw", {
       x0: lastX,
       y0: lastY,
-      x1: x1,
-      y1: y1,
+      x1: x,
+      y1: y,
       color: currentColor,
       size: currentBrushSize,
     });
-    lastX = x1;
-    lastY = y1;
+    [lastX, lastY] = [x, y];
   },
   { passive: false }
 );
@@ -663,12 +676,9 @@ if (uploadImageBtn && imageInput) {
 }
 
 function drawTempImage() {
-  // Redraw canvas and overlay temp image
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // Optionally: redraw existing drawing here if you want to preserve it
+  redrawEverything();
   if (tempImage) {
     ctx.drawImage(tempImage, tempImageX, tempImageY, tempImageW, tempImageH);
-    // Draw resize handle
     ctx.fillStyle = "#007bff";
     ctx.fillRect(
       tempImageX + tempImageW - resizeHandleSize / 2,
@@ -676,6 +686,9 @@ function drawTempImage() {
       resizeHandleSize,
       resizeHandleSize
     );
+    showZoomControls(true);
+  } else {
+    showZoomControls(false);
   }
 }
 
@@ -728,4 +741,17 @@ if (clearCanvasFloatingBtn) {
   clearCanvasFloatingBtn.addEventListener("click", () => {
     if (clearCanvasBtn) clearCanvasBtn.click();
   });
+}
+
+// Redraw everything on resize
+window.addEventListener("resize", () => {
+  resizeCanvas();
+  redrawEverything();
+});
+
+// Redraw everything after clear, image placement, or restore
+function clearAllImages() {
+  placedImages = [];
+  localStorage.removeItem("doodle_images");
+  redrawEverything();
 }
