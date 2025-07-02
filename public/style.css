@@ -50,7 +50,7 @@ body {
   background-color: var(--navbar-bg);
   color: var(--navbar-fg);
   padding: 10px 20px;
-  display: flex;
+  display: fit-content;
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
