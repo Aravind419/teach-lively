@@ -27,6 +27,8 @@ const deleteAccountBtn = document.getElementById("deleteAccountBtn");
 const confirmModal = document.getElementById("confirmModal");
 const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
 const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
+const uploadImageBtn = document.getElementById("uploadImageBtn");
+const imageInput = document.getElementById("imageInput");
 
 let isDrawing = false;
 let lastX = 0;
@@ -134,12 +136,46 @@ function drawLine(x0, y0, x1, y1, color, size) {
 }
 
 canvas.addEventListener("mousedown", (e) => {
+  if (tempImage) {
+    // Check if user clicked resize handle
+    if (
+      e.offsetX > tempImageX + tempImageW - resizeHandleSize &&
+      e.offsetX < tempImageX + tempImageW + resizeHandleSize &&
+      e.offsetY > tempImageY + tempImageH - resizeHandleSize &&
+      e.offsetY < tempImageY + tempImageH + resizeHandleSize
+    ) {
+      resizingImage = true;
+      dragOffsetX = e.offsetX - (tempImageX + tempImageW);
+      dragOffsetY = e.offsetY - (tempImageY + tempImageH);
+      return;
+    }
+    // Check if user clicked inside image
+    if (
+      e.offsetX > tempImageX &&
+      e.offsetX < tempImageX + tempImageW &&
+      e.offsetY > tempImageY &&
+      e.offsetY < tempImageY + tempImageH
+    ) {
+      draggingImage = true;
+      dragOffsetX = e.offsetX - tempImageX;
+      dragOffsetY = e.offsetY - tempImageY;
+      return;
+    }
+  }
   isDrawing = true;
   [lastX, lastY] = [e.offsetX, e.offsetY];
 });
 
 canvas.addEventListener("mousemove", (e) => {
-  if (!isDrawing) return;
+  if (draggingImage && tempImage) {
+    tempImageX = e.offsetX - dragOffsetX;
+    tempImageY = e.offsetY - dragOffsetY;
+    drawTempImage();
+  } else if (resizingImage && tempImage) {
+    tempImageW = Math.max(30, e.offsetX - tempImageX);
+    tempImageH = Math.max(30, e.offsetY - tempImageY);
+    drawTempImage();
+  } else if (!isDrawing) return;
   const x1 = e.offsetX;
   const y1 = e.offsetY;
   drawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize);
@@ -154,7 +190,12 @@ canvas.addEventListener("mousemove", (e) => {
   [lastX, lastY] = [x1, y1];
 });
 
-canvas.addEventListener("mouseup", () => {
+canvas.addEventListener("mouseup", (e) => {
+  if (draggingImage || resizingImage) {
+    draggingImage = false;
+    resizingImage = false;
+    return;
+  }
   isDrawing = false;
 });
 
@@ -379,9 +420,21 @@ socket.on("register-result", (result) => {
   }
 });
 
-// Listen for user list updates
+// User list update
+function renderUserList(users) {
+  if (userList) {
+    if (Array.isArray(users) && users.length > 0) {
+      userList.innerHTML = users
+        .map((u) => `<span class="user-chip">${u}</span>`)
+        .join(" ");
+    } else {
+      userList.innerHTML =
+        '<span style="color:#ccc;">No other users online</span>';
+    }
+  }
+}
 socket.on("user-list", (users) => {
-  userList.textContent = "Users: " + users.join(", ");
+  renderUserList(users);
 });
 
 // Add print button logic
@@ -571,3 +624,63 @@ if (confirmModal) {
     }
   });
 }
+
+// Image upload and drag/resize logic
+let tempImage = null;
+let tempImageX = 50;
+let tempImageY = 50;
+let tempImageW = 150;
+let tempImageH = 150;
+let draggingImage = false;
+let resizingImage = false;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+let resizeHandleSize = 16;
+
+if (uploadImageBtn && imageInput) {
+  uploadImageBtn.addEventListener("click", () => imageInput.click());
+  imageInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (evt) {
+      const img = new window.Image();
+      img.onload = function () {
+        tempImage = img;
+        tempImageX = 50;
+        tempImageY = 50;
+        tempImageW = Math.min(200, img.width);
+        tempImageH = Math.min(200, img.height);
+        drawTempImage();
+      };
+      img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function drawTempImage() {
+  // Redraw canvas and overlay temp image
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Optionally: redraw existing drawing here if you want to preserve it
+  if (tempImage) {
+    ctx.drawImage(tempImage, tempImageX, tempImageY, tempImageW, tempImageH);
+    // Draw resize handle
+    ctx.fillStyle = "#007bff";
+    ctx.fillRect(
+      tempImageX + tempImageW - resizeHandleSize / 2,
+      tempImageY + tempImageH - resizeHandleSize / 2,
+      resizeHandleSize,
+      resizeHandleSize
+    );
+  }
+}
+
+canvas.addEventListener("dblclick", (e) => {
+  // Place the image permanently on double click
+  if (tempImage) {
+    ctx.drawImage(tempImage, tempImageX, tempImageY, tempImageW, tempImageH);
+    tempImage = null;
+    // Optionally: emit drawing update to others here
+  }
+});

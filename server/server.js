@@ -161,6 +161,10 @@ io.on("connection", (socket) => {
   socket.on("logout", () => {
     console.log(`User ${socket.username || "unknown"} logged out`);
     // Clear username from socket
+    if (userNames[socket.id]) {
+      delete userNames[socket.id];
+      broadcastUserList();
+    }
     socket.username = null;
   });
 
@@ -203,10 +207,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected");
-    delete userNames[socket.id];
-    broadcastUserList();
+    if (userNames[socket.id]) {
+      delete userNames[socket.id];
+      broadcastUserList();
+    }
     io.emit("userDisconnected", io.engine.clientsCount);
+    console.log("A user disconnected");
   });
 });
 
