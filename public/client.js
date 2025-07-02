@@ -22,6 +22,11 @@ const loginError = document.getElementById("loginError");
 const printBtn = document.getElementById("printBtn");
 const themeToggle = document.getElementById("themeToggle");
 const mobileMoreBtn = document.getElementById("mobileMoreBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const deleteAccountBtn = document.getElementById("deleteAccountBtn");
+const confirmModal = document.getElementById("confirmModal");
+const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
+const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
 
 let isDrawing = false;
 let lastX = 0;
@@ -495,4 +500,74 @@ if (mobileMoreBtn && controlPanel) {
   }
   window.addEventListener("resize", updatePanelVisibility);
   updatePanelVisibility();
+}
+
+// Logout and Delete Account functionality
+function showConfirmModal() {
+  confirmModal.style.display = "flex";
+}
+
+function hideConfirmModal() {
+  confirmModal.style.display = "none";
+}
+
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", () => {
+    // Clear user session
+    username = "";
+    localStorage.removeItem("username");
+
+    // Emit logout event to server
+    socket.emit("logout");
+
+    // Show login modal
+    showUsernameModal();
+
+    // Close mobile drawer if open
+    if (window.innerWidth <= 700 && controlPanel) {
+      controlPanel.classList.remove("open");
+    }
+  });
+}
+
+if (deleteAccountBtn) {
+  deleteAccountBtn.addEventListener("click", () => {
+    showConfirmModal();
+  });
+}
+
+if (cancelDeleteBtn) {
+  cancelDeleteBtn.addEventListener("click", hideConfirmModal);
+}
+
+if (confirmDeleteBtn) {
+  confirmDeleteBtn.addEventListener("click", () => {
+    // Emit delete account event to server
+    socket.emit("delete-account", { username });
+
+    // Clear user session
+    username = "";
+    localStorage.removeItem("username");
+
+    // Hide confirmation modal
+    hideConfirmModal();
+
+    // Show registration modal (to register again)
+    showUsernameModal();
+    registerTab.click(); // Switch to register tab
+
+    // Close mobile drawer if open
+    if (window.innerWidth <= 700 && controlPanel) {
+      controlPanel.classList.remove("open");
+    }
+  });
+}
+
+// Close modal when clicking outside
+if (confirmModal) {
+  confirmModal.addEventListener("click", (e) => {
+    if (e.target === confirmModal) {
+      hideConfirmModal();
+    }
+  });
 }

@@ -277,3 +277,88 @@ canvas {
 .pastel-swatch:hover {
   border: 2px solid var(--button-bg);
 }
+
+.control-actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+  padding-top: 20px;
+}
+
+.danger-btn {
+  background: #e74c3c;
+  color: #fff;
+  border-radius: 18px;
+  border: none;
+  font-size: 13px;
+  padding: 8px 12px;
+  margin: 0;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.danger-btn:hover {
+  background: #c0392b;
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.15);
+}
+
+.danger-btn:active {
+  background: #e74c3c;
+  transform: scale(0.97);
+  box-shadow: 0 1px 2px rgba(231, 76, 60, 0.1);
+}
+
+.custom-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-modal-content {
+  background: var(--panel-bg, #fff);
+  color: var(--foreground, #222);
+  border-radius: 16px;
+  padding: 2em 1.5em 1.5em 1.5em;
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.18);
+  min-width: 260px;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.custom-modal-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 1.5em;
+}
+
+@media (max-width: 700px) {
+  .control-actions {
+    margin-top: 24px;
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+
+  .danger-btn {
+    font-size: 12px;
+    padding: 12px 8px;
+    border-radius: 22px;
+    min-height: 40px;
+  }
+}

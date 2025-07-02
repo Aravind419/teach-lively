@@ -102,6 +102,7 @@ io.on("connection", (socket) => {
       const user = await usersCollection.findOne({ name });
       if (user) {
         if (user.password === password) {
+          socket.username = name; // Store username in socket
           socket.emit("login-result", { success: true, name });
         } else {
           socket.emit("login-result", {
@@ -110,14 +111,11 @@ io.on("connection", (socket) => {
           });
         }
       } else {
-        // Register new user
-        await usersCollection.insertOne({
-          name,
-          password,
-          createdAt: new Date(),
-          lastActive: new Date(),
+        // User doesn't exist - don't auto-register
+        socket.emit("login-result", {
+          success: false,
+          message: "User not found. Please register first.",
         });
-        socket.emit("login-result", { success: true, name });
       }
     } catch (err) {
       socket.emit("login-result", {
@@ -149,12 +147,57 @@ io.on("connection", (socket) => {
           createdAt: new Date(),
           lastActive: new Date(),
         });
+        socket.username = name; // Store username in socket
         socket.emit("register-result", { success: true, name });
       }
     } catch (err) {
       socket.emit("register-result", {
         success: false,
         message: "Error: " + err.message,
+      });
+    }
+  });
+
+  socket.on("logout", () => {
+    console.log(`User ${socket.username || "unknown"} logged out`);
+    // Clear username from socket
+    socket.username = null;
+  });
+
+  socket.on("delete-account", async (data) => {
+    try {
+      const { username } = data;
+      if (!username) {
+        console.log("No username provided for account deletion");
+        return;
+      }
+
+      console.log(`Deleting account for user: ${username}`);
+
+      // Delete user from database using 'name' field (not 'username')
+      const result = await usersCollection.deleteOne({ name: username });
+
+      if (result.deletedCount > 0) {
+        console.log(`Account deleted successfully for user: ${username}`);
+        socket.emit("user-deleted", {
+          success: true,
+          message: "Account deleted successfully",
+        });
+      } else {
+        console.log(`No account found to delete for user: ${username}`);
+        socket.emit("user-deleted", {
+          success: false,
+          message: "Account not found",
+        });
+      }
+
+      // Clear username from socket
+      socket.username = null;
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      socket.emit("user-deleted", {
+        success: false,
+        message: "Error deleting account",
       });
     }
   });
