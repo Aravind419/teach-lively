@@ -117,11 +117,12 @@ socket.on("userDisconnected", (count) => {
 });
 
 socket.on("draw", (data) => {
-  drawLine(data.x0, data.y0, data.x1, data.y1, data.color, data.size);
+  saveAndDrawLine(data.x0, data.y0, data.x1, data.y1, data.color, data.size);
 });
 
 socket.on("clear", () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  clearCanvasLocal();
 });
 
 // Drawing functions
@@ -178,7 +179,7 @@ canvas.addEventListener("mousemove", (e) => {
   } else if (!isDrawing) return;
   const x1 = e.offsetX;
   const y1 = e.offsetY;
-  drawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize);
+  saveAndDrawLine(lastX, lastY, x1, y1, currentColor, currentBrushSize);
   socket.emit("draw", {
     x0: lastX,
     y0: lastY,
@@ -215,6 +216,7 @@ brushSizeSelector.addEventListener("change", (e) => {
 clearCanvasBtn.addEventListener("click", () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   socket.emit("clear");
+  clearCanvasLocal();
 });
 
 // Audio call logic
@@ -681,6 +683,42 @@ canvas.addEventListener("dblclick", (e) => {
   if (tempImage) {
     ctx.drawImage(tempImage, tempImageX, tempImageY, tempImageW, tempImageH);
     tempImage = null;
+    saveCanvasToLocal();
     // Optionally: emit drawing update to others here
   }
 });
+
+// --- Canvas Persistence Logic ---
+function saveCanvasToLocal() {
+  try {
+    const dataURL = canvas.toDataURL();
+    localStorage.setItem("doodle_canvas", dataURL);
+  } catch (e) {
+    // Ignore quota errors
+  }
+}
+
+function restoreCanvasFromLocal() {
+  const dataURL = localStorage.getItem("doodle_canvas");
+  if (dataURL) {
+    const img = new window.Image();
+    img.onload = function () {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = dataURL;
+  }
+}
+
+function clearCanvasLocal() {
+  localStorage.removeItem("doodle_canvas");
+}
+
+// Restore on page load
+window.addEventListener("DOMContentLoaded", restoreCanvasFromLocal);
+
+// Save after every drawing or image placement
+function saveAndDrawLine(x0, y0, x1, y1, color, size) {
+  drawLine(x0, y0, x1, y1, color, size);
+  saveCanvasToLocal();
+}
