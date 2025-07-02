@@ -362,3 +362,42 @@ canvas {
     min-height: 40px;
   }
 }
+
+.floating-clear-btn {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 2200;
+  background: #e74c3c;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  font-size: 2em;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+}
+.floating-clear-btn:hover {
+  background: #c0392b;
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 8px 24px rgba(231, 76, 60, 0.18);
+}
+.floating-clear-btn:active {
+  background: #e74c3c;
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.1);
+}
+@media (max-width: 700px) {
+  .floating-clear-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 1.5em;
+    right: 16px;
+    bottom: 16px;
+  }
+}

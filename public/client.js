@@ -29,6 +29,7 @@ const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
 const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
 const uploadImageBtn = document.getElementById("uploadImageBtn");
 const imageInput = document.getElementById("imageInput");
+const clearCanvasFloatingBtn = document.getElementById("clearCanvasFloating");
 
 let isDrawing = false;
 let lastX = 0;
@@ -721,4 +722,10 @@ window.addEventListener("DOMContentLoaded", restoreCanvasFromLocal);
 function saveAndDrawLine(x0, y0, x1, y1, color, size) {
   drawLine(x0, y0, x1, y1, color, size);
   saveCanvasToLocal();
+}
+
+if (clearCanvasFloatingBtn) {
+  clearCanvasFloatingBtn.addEventListener("click", () => {
+    if (clearCanvasBtn) clearCanvasBtn.click();
+  });
 }
