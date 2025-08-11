@@ -41,6 +41,32 @@ const reactionOverlay = document.getElementById("reactionOverlay");
 const toastContainer = document.getElementById("toastContainer");
 const reactionsBar = document.getElementById("reactionsBar");
 
+// --- Mobile viewport height fix (dvh/svh fallback) ---
+function setAppHeightVar() {
+  const vv = window.visualViewport;
+  const appHeight =
+    vv && vv.height ? Math.round(vv.height) : window.innerHeight;
+  document.documentElement.style.setProperty("--app-height", `${appHeight}px`);
+}
+window.addEventListener("resize", setAppHeightVar);
+window.addEventListener("orientationchange", setAppHeightVar);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", setAppHeightVar);
+}
+setAppHeightVar();
+
+function getCssAppHeight() {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(
+    "--app-height"
+  );
+  const parsed = parseInt(raw, 10);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return (
+    (window.visualViewport && window.visualViewport.height) ||
+    window.innerHeight
+  );
+}
+
 let isDrawing = false;
 let lastX = 0;
 let lastY = 0;
@@ -115,8 +141,9 @@ function resizeCanvas() {
 
   const navbarEl = document.querySelector(".navbar");
   if (isMobile) {
+    const appHeight = getCssAppHeight();
     canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight - (navbarEl ? navbarEl.offsetHeight : 0);
+    canvas.height = appHeight - (navbarEl ? navbarEl.offsetHeight : 0);
   } else {
     const controlPanelEl = document.querySelector(".control-panel");
     const chatEl = document.getElementById("chatPanel");
@@ -679,8 +706,11 @@ if (chatToggleBtn && chatPanel) {
   });
   function setInitialChatVisibility() {
     const isMobile = window.innerWidth <= 700;
-    chatPanel.classList.remove("open");
-    chatPanel.style.display = isMobile ? "" : "flex";
+    // Do not forcibly close the panel on mobile here to avoid keyboard-triggered resize hiding it.
+    if (!isMobile) {
+      chatPanel.classList.remove("open");
+      chatPanel.style.display = "flex";
+    }
     // Expose navbar height to CSS for mobile chat sizing
     const navbarEl = document.querySelector(".navbar");
     const navH = navbarEl ? navbarEl.offsetHeight : 0;
@@ -711,6 +741,20 @@ if (chatToggleBtn && chatPanel) {
 socket.on("chat-message", (payload) => {
   renderChatMessage(payload);
 });
+
+// Keep chat visible and scroll to latest when focusing input on mobile
+if (chatInput && chatPanel) {
+  chatInput.addEventListener("focus", () => {
+    const isMobile = window.innerWidth <= 700;
+    if (isMobile) {
+      chatPanel.classList.add("open");
+      // Ensure messages area scrolls to bottom after keyboard animation
+      setTimeout(() => {
+        if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+      }, 300);
+    }
+  });
+}
 
 // Drawing status toasts
 socket.on("drawing-status", ({ name: who, isDrawing }) => {

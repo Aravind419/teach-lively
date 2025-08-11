@@ -18,6 +18,9 @@
   --pastel-green: #c1f2c7;
   --pastel-yellow: #fff5ba;
   --pastel-purple: #e0bbff;
+  /* Dynamic viewport helpers (updated via JS) */
+  --navbar-height: 0px;
+  --app-height: 100vh;
 }
 
 body.dark {
@@ -265,7 +268,6 @@ canvas {
   padding: 10px;
   border-top: 1px solid var(--panel-border);
   background: var(--panel-bg);
-
 }
 .chat-input-row input {
   flex: 1;
@@ -323,6 +325,13 @@ canvas {
 
 /* --- Responsive and mobile styles --- */
 @media (max-width: 700px) {
+  html,
+  body {
+    height: var(--app-height, 100vh);
+  }
+  .main-content {
+    height: calc(var(--app-height, 100vh) - var(--navbar-height, 0px));
+  }
   .main-content {
     flex-direction: column;
   }
@@ -333,7 +342,7 @@ canvas {
     right: 0;
     width: 80vw;
     max-width: none;
-    height: calc(100vh - var(--navbar-height, 0px));
+    height: calc(var(--app-height, 100vh) - var(--navbar-height, 0px));
     border-left: 1px solid var(--panel-border);
     border-top: none;
     transform: translateX(100%);
@@ -342,7 +351,6 @@ canvas {
     display: flex;
     flex-direction: column;
     padding-bottom: max(env(safe-area-inset-bottom), 8px);
-    
   }
   .chat-input-row {
     margin-bottom: 16px;
@@ -402,9 +410,9 @@ canvas {
   .main-content canvas {
     margin-bottom: 0;
     width: 100vw !important;
-    height: 100vh !important;
+    height: var(--app-height, 100vh) !important;
     max-width: 100vw;
-    max-height: 100vh;
+    max-height: var(--app-height, 100vh);
     display: block;
   }
   .floating-chat-btn {
@@ -423,7 +431,6 @@ canvas {
     justify-content: flex-start !important;
     padding: 8px 6px !important;
     gap: 10px !important;
-    
   }
   .navbar > * {
     margin-right: 8px !important;
