@@ -11,15 +11,17 @@ const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
 const MONGO_URL = process.env.MONGO_URL;
+// Allow running without MongoDB for local/dev usage
 if (!MONGO_URL) {
-  console.error(
-    "ERROR: MONGO_URL environment variable is not set. Please set it to your MongoDB connection string."
+  console.warn(
+    "WARNING: MONGO_URL is not set. Proceeding without database. Some features like user persistence and saving drawings will be disabled."
   );
-  process.exit(1);
 }
 const DB_NAME = "doodletogether";
 let drawingsCollection;
 let usersCollection;
+let mongoClient;
+let dbReady = false;
 
 // Track usernames by socket id
 const userNames = {};
@@ -27,16 +29,38 @@ const userNames = {};
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, "../public")));
 
-MongoClient.connect(MONGO_URL, { useUnifiedTopology: true })
-  .then((client) => {
-    const db = client.db(DB_NAME);
+// Health endpoint
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, dbConnected: !!usersCollection });
+});
+
+async function connectToMongoWithRetry() {
+  if (!MONGO_URL) return;
+  if (dbReady) return;
+  try {
+    console.log("Attempting MongoDB connection...");
+    mongoClient = await MongoClient.connect(MONGO_URL, {
+      useUnifiedTopology: true,
+    });
+    const db = mongoClient.db(DB_NAME);
     drawingsCollection = db.collection("drawings");
     usersCollection = db.collection("users");
+    dbReady = true;
     console.log("Connected to MongoDB");
-  })
-  .catch((err) => {
-    console.error("MongoDB connection error:", err);
-  });
+  } catch (err) {
+    dbReady = false;
+    usersCollection = undefined;
+    drawingsCollection = undefined;
+    console.error("MongoDB connection error:", err.message);
+  }
+}
+
+if (MONGO_URL) {
+  connectToMongoWithRetry();
+  setInterval(() => {
+    if (!dbReady) connectToMongoWithRetry();
+  }, 15000);
+}
 
 io.on("connection", (socket) => {
   console.log("A user connected");
@@ -90,12 +114,62 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("audio-signal", data);
   });
 
+  // --- Interactive features ---
+  // Live cursor positions (normalized to canvas size)
+  socket.on("cursor-move", (payload) => {
+    // payload: { xNorm, yNorm, color, name }
+    socket.broadcast.emit("cursor-move", {
+      id: socket.id,
+      ...payload,
+    });
+  });
+
+  // Remove cursor when a user leaves the page
+  socket.on("disconnecting", () => {
+    io.emit("cursor-remove", { id: socket.id });
+  });
+
+  // Chat messages
+  socket.on("chat-message", ({ message, name }) => {
+    const trimmed = (message || "").toString().trim();
+    if (!trimmed) return;
+    io.emit("chat-message", {
+      message: trimmed,
+      name: name || userNames[socket.id] || "Anonymous",
+      time: Date.now(),
+    });
+  });
+
+  // Drawing status (start/stop)
+  socket.on("start-drawing", ({ name }) => {
+    io.emit("drawing-status", {
+      name: name || userNames[socket.id],
+      isDrawing: true,
+    });
+  });
+  socket.on("stop-drawing", ({ name }) => {
+    io.emit("drawing-status", {
+      name: name || userNames[socket.id],
+      isDrawing: false,
+    });
+  });
+
+  // Emoji reactions
+  socket.on("reaction", ({ type, name }) => {
+    io.emit("reaction", {
+      type,
+      name: name || userNames[socket.id],
+      time: Date.now(),
+    });
+  });
+
   socket.on("login", async ({ name, password }) => {
+    // Fallback: if DB is not available, accept ephemeral login
     if (!usersCollection) {
-      socket.emit("login-result", {
-        success: false,
-        message: "Database not ready",
-      });
+      socket.username = name || "Guest";
+      userNames[socket.id] = socket.username;
+      broadcastUserList();
+      socket.emit("login-result", { success: true, name: socket.username });
       return;
     }
     try {
@@ -126,11 +200,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("register", async ({ name, password }) => {
+    // Fallback: if DB is not available, accept ephemeral registration
     if (!usersCollection) {
-      socket.emit("register-result", {
-        success: false,
-        message: "Database not ready",
-      });
+      socket.username = name || "Guest";
+      userNames[socket.id] = socket.username;
+      broadcastUserList();
+      socket.emit("register-result", { success: true, name: socket.username });
       return;
     }
     try {
@@ -177,22 +252,29 @@ io.on("connection", (socket) => {
       }
 
       console.log(`Deleting account for user: ${username}`);
-
-      // Delete user from database using 'name' field (not 'username')
-      const result = await usersCollection.deleteOne({ name: username });
-
-      if (result.deletedCount > 0) {
-        console.log(`Account deleted successfully for user: ${username}`);
+      if (!usersCollection) {
+        // Ephemeral success when no DB
         socket.emit("user-deleted", {
           success: true,
-          message: "Account deleted successfully",
+          message: "Account deleted",
         });
       } else {
-        console.log(`No account found to delete for user: ${username}`);
-        socket.emit("user-deleted", {
-          success: false,
-          message: "Account not found",
-        });
+        // Delete user from database using 'name' field (not 'username')
+        const result = await usersCollection.deleteOne({ name: username });
+
+        if (result.deletedCount > 0) {
+          console.log(`Account deleted successfully for user: ${username}`);
+          socket.emit("user-deleted", {
+            success: true,
+            message: "Account deleted successfully",
+          });
+        } else {
+          console.log(`No account found to delete for user: ${username}`);
+          socket.emit("user-deleted", {
+            success: false,
+            message: "Account not found",
+          });
+        }
       }
 
       // Clear username from socket

@@ -30,6 +30,16 @@ const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
 const uploadImageBtn = document.getElementById("uploadImageBtn");
 const imageInput = document.getElementById("imageInput");
 const clearCanvasFloatingBtn = document.getElementById("clearCanvasFloating");
+// Interactive UI elements
+const chatPanel = document.getElementById("chatPanel");
+const chatToggleBtn = document.getElementById("chatToggleBtn");
+const chatMessages = document.getElementById("chatMessages");
+const chatInput = document.getElementById("chatInput");
+const chatSendBtn = document.getElementById("chatSendBtn");
+const cursorOverlay = document.getElementById("cursorOverlay");
+const reactionOverlay = document.getElementById("reactionOverlay");
+const toastContainer = document.getElementById("toastContainer");
+const reactionsBar = document.getElementById("reactionsBar");
 
 let isDrawing = false;
 let lastX = 0;
@@ -40,6 +50,30 @@ let localStream = null;
 let peer = null;
 let audioCallActive = false;
 let username = "";
+
+// Utility: throttling
+function throttle(fn, wait) {
+  let last = 0;
+  return function (...args) {
+    const now = Date.now();
+    if (now - last >= wait) {
+      last = now;
+      fn.apply(this, args);
+    }
+  };
+}
+
+// Utility: toasts
+function showToast(text) {
+  if (!toastContainer) return;
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = text;
+  toastContainer.appendChild(el);
+  setTimeout(() => {
+    if (el.parentNode) el.parentNode.removeChild(el);
+  }, 2200);
+}
 
 // Mobile menu toggle logic
 const menuToggle = document.getElementById("menuToggle");
@@ -73,19 +107,34 @@ if (menuToggle && controlPanel) {
 // Set canvas dimensions
 function resizeCanvas() {
   const isMobile = window.innerWidth <= 700;
+  // Snapshot current canvas to restore after resize
+  let snapshotUrl = null;
+  try {
+    snapshotUrl = canvas.toDataURL();
+  } catch (_) {}
+
+  const navbarEl = document.querySelector(".navbar");
   if (isMobile) {
     canvas.width = window.innerWidth;
-    canvas.height =
-      window.innerHeight -
-      (document.querySelector(".navbar").offsetHeight || 0) -
-      60;
+    canvas.height = window.innerHeight - (navbarEl ? navbarEl.offsetHeight : 0);
   } else {
-    canvas.width =
-      window.innerWidth -
-      (document.querySelector(".control-panel").offsetWidth || 0);
-    canvas.height =
-      window.innerHeight -
-      (document.querySelector(".navbar").offsetHeight || 0);
+    const controlPanelEl = document.querySelector(".control-panel");
+    const chatEl = document.getElementById("chatPanel");
+    const controlWidth = controlPanelEl ? controlPanelEl.offsetWidth : 0;
+    const chatVisible = chatEl && chatEl.style.display !== "none";
+    const chatWidth = chatVisible ? chatEl.offsetWidth : 0;
+    canvas.width = window.innerWidth - controlWidth - chatWidth;
+    canvas.height = window.innerHeight - (navbarEl ? navbarEl.offsetHeight : 0);
+  }
+
+  // Restore snapshot to avoid clearing drawings due to canvas resize
+  if (snapshotUrl) {
+    const img = new window.Image();
+    img.onload = function () {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = snapshotUrl;
   }
 }
 window.addEventListener("resize", resizeCanvas);
@@ -100,6 +149,7 @@ socket.on("connect", () => {
   if (username) {
     socket.emit("set-username", username);
   }
+  showToast("Connected");
 });
 
 socket.on("disconnect", () => {
@@ -107,6 +157,7 @@ socket.on("disconnect", () => {
   connectionStatus.textContent = "🔴 Disconnected";
   connectionStatus.classList.remove("connected");
   connectionStatus.classList.add("disconnected");
+  showToast("Disconnected");
 });
 
 socket.on("userConnected", (count) => {
@@ -124,6 +175,46 @@ socket.on("draw", (data) => {
 socket.on("clear", () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   clearCanvasLocal();
+});
+
+// --- Live cursors ---
+const liveCursors = new Map(); // id -> { el }
+
+function ensureCursorElement(id, color, name) {
+  let record = liveCursors.get(id);
+  if (!record) {
+    const el = document.createElement("div");
+    el.className = "live-cursor";
+    const dot = document.createElement("div");
+    dot.className = "dot";
+    if (color) dot.style.background = color;
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = name || "Friend";
+    el.appendChild(dot);
+    el.appendChild(label);
+    if (cursorOverlay) cursorOverlay.appendChild(el);
+    record = { el };
+    liveCursors.set(id, record);
+  }
+  return record;
+}
+
+socket.on("cursor-move", ({ id, xNorm, yNorm, color, name }) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = xNorm * rect.width;
+  const y = yNorm * rect.height;
+  const { el } = ensureCursorElement(id, color, name);
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+});
+
+socket.on("cursor-remove", ({ id }) => {
+  const record = liveCursors.get(id);
+  if (record && record.el && record.el.parentNode) {
+    record.el.parentNode.removeChild(record.el);
+  }
+  liveCursors.delete(id);
 });
 
 // Drawing functions
@@ -153,16 +244,34 @@ function getCanvasCoords(e) {
   return { x, y };
 }
 
+function emitCursor(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX =
+    e.touches && e.touches.length ? e.touches[0].clientX : e.clientX;
+  const clientY =
+    e.touches && e.touches.length ? e.touches[0].clientY : e.clientY;
+  const xNorm = (clientX - rect.left) / rect.width;
+  const yNorm = (clientY - rect.top) / rect.height;
+  if (xNorm < 0 || xNorm > 1 || yNorm < 0 || yNorm > 1) return;
+  socket.emit("cursor-move", {
+    xNorm,
+    yNorm,
+    color: currentColor,
+    name: username,
+  });
+}
+const throttledEmitCursor = throttle(emitCursor, 40);
+
 // --- Redraw everything ---
 function redrawEverything() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  redrawAllImages();
-  // Optionally: redraw other canvas content here (e.g., lines from localStorage)
+  // Restore from localStorage snapshot so resizing doesn't wipe drawings
+  restoreCanvasFromLocal();
 }
 
 // --- Patch all event listeners to use getCanvasCoords and redrawEverything ---
 canvas.addEventListener("mousedown", (e) => {
   const { x, y } = getCanvasCoords(e);
+  throttledEmitCursor(e);
   if (tempImage) {
     if (
       x > tempImageX + tempImageW - resizeHandleSize &&
@@ -189,10 +298,12 @@ canvas.addEventListener("mousedown", (e) => {
   }
   isDrawing = true;
   [lastX, lastY] = [x, y];
+  socket.emit("start-drawing", { name: username });
 });
 
 canvas.addEventListener("mousemove", (e) => {
   const { x, y } = getCanvasCoords(e);
+  throttledEmitCursor(e);
   if (draggingImage && tempImage) {
     tempImageX = x - dragOffsetX;
     tempImageY = y - dragOffsetY;
@@ -218,10 +329,12 @@ canvas.addEventListener("mouseup", (e) => {
   draggingImage = false;
   resizingImage = false;
   isDrawing = false;
+  socket.emit("stop-drawing", { name: username });
 });
 
 canvas.addEventListener("mouseout", () => {
   isDrawing = false;
+  socket.emit("stop-drawing", { name: username });
 });
 
 // Control panel event listeners
@@ -471,6 +584,8 @@ canvas.addEventListener("touchstart", (e) => {
   const { x, y } = getCanvasCoords(e);
   isDrawing = true;
   [lastX, lastY] = [x, y];
+  throttledEmitCursor(e);
+  socket.emit("start-drawing", { name: username });
 });
 canvas.addEventListener(
   "touchmove",
@@ -479,6 +594,7 @@ canvas.addEventListener(
     const { x, y } = getCanvasCoords(e);
     if (!isDrawing) return;
     saveAndDrawLine(lastX, lastY, x, y, currentColor, currentBrushSize);
+    throttledEmitCursor(e);
     socket.emit("draw", {
       x0: lastX,
       y0: lastY,
@@ -493,9 +609,11 @@ canvas.addEventListener(
 );
 canvas.addEventListener("touchend", () => {
   isDrawing = false;
+  socket.emit("stop-drawing", { name: username });
 });
 canvas.addEventListener("touchcancel", () => {
   isDrawing = false;
+  socket.emit("stop-drawing", { name: username });
 });
 
 // Theme toggle logic
@@ -515,6 +633,116 @@ if (themeToggle) {
     localStorage.setItem("theme", darkMode ? "dark" : "light");
   });
 }
+
+// Chat UI
+function renderChatMessage({ name: from, message, time }) {
+  if (!chatMessages) return;
+  const el = document.createElement("div");
+  el.className = "chat-message";
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const when = new Date(time || Date.now()).toLocaleTimeString();
+  meta.textContent = `${from || "Anonymous"} • ${when}`;
+  const text = document.createElement("div");
+  text.className = "text";
+  text.textContent = message;
+  el.appendChild(meta);
+  el.appendChild(text);
+  chatMessages.appendChild(el);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function sendChat() {
+  const msg = (chatInput?.value || "").trim();
+  if (!msg) return;
+  socket.emit("chat-message", { message: msg, name: username });
+  chatInput.value = "";
+}
+
+if (chatSendBtn && chatInput) {
+  chatSendBtn.addEventListener("click", sendChat);
+  chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendChat();
+  });
+}
+
+if (chatToggleBtn && chatPanel) {
+  chatToggleBtn.addEventListener("click", () => {
+    const isMobile = window.innerWidth <= 700;
+    if (isMobile) {
+      chatPanel.classList.toggle("open");
+    } else {
+      const isHidden = chatPanel.style.display === "none";
+      chatPanel.style.display = isHidden ? "flex" : "none";
+      resizeCanvas();
+    }
+  });
+  function setInitialChatVisibility() {
+    const isMobile = window.innerWidth <= 700;
+    chatPanel.classList.remove("open");
+    chatPanel.style.display = isMobile ? "" : "flex";
+  }
+  window.addEventListener("resize", setInitialChatVisibility);
+  setInitialChatVisibility();
+
+  // Hide chat when clicking outside (desktop and mobile)
+  document.addEventListener("click", (e) => {
+    const isMobile = window.innerWidth <= 700;
+    const clickedInsideChat = chatPanel.contains(e.target);
+    const clickedToggle = chatToggleBtn.contains(e.target);
+    if (clickedInsideChat || clickedToggle) return;
+    if (isMobile) {
+      if (chatPanel.classList.contains("open")) {
+        chatPanel.classList.remove("open");
+      }
+    } else {
+      if (chatPanel.style.display !== "none") {
+        chatPanel.style.display = "none";
+        resizeCanvas();
+      }
+    }
+  });
+}
+
+socket.on("chat-message", (payload) => {
+  renderChatMessage(payload);
+});
+
+// Drawing status toasts
+socket.on("drawing-status", ({ name: who, isDrawing }) => {
+  if (!who || who === username) return;
+  showToast(`${who} ${isDrawing ? "started" : "stopped"} drawing`);
+});
+
+// Emoji reactions
+function spawnReaction(emoji) {
+  if (!reactionOverlay) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = rect.width - 60;
+  const y = rect.height - 80;
+  const el = document.createElement("div");
+  el.className = "reaction";
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  el.textContent = emoji;
+  reactionOverlay.appendChild(el);
+  setTimeout(() => el.remove(), 1300);
+}
+
+if (reactionsBar) {
+  reactionsBar.addEventListener("click", (e) => {
+    const btn = e.target.closest(".reaction-btn");
+    if (!btn) return;
+    const emoji = btn.getAttribute("data-reaction");
+    if (!emoji) return;
+    socket.emit("reaction", { type: emoji, name: username });
+    spawnReaction(emoji);
+  });
+}
+
+socket.on("reaction", ({ type }) => {
+  spawnReaction(type);
+});
 
 // Mobile drawer logic
 if (mobileMoreBtn && controlPanel) {

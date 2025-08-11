@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>For only us</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=2" />
     <!-- Google tag (gtag.js) -->
     <script
       async
@@ -92,12 +92,35 @@
           </button>
         </div>
       </div>
-      <canvas id="whiteboard"></canvas>
+      <div class="canvas-container">
+        <canvas id="whiteboard"></canvas>
+        <div id="cursorOverlay" class="cursor-overlay"></div>
+        <div id="reactionOverlay" class="reaction-overlay"></div>
+        <div id="toastContainer" class="toast-container"></div>
+      </div>
+      <div class="chat-panel" id="chatPanel">
+        <div class="chat-header">Chat</div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="reaction-buttons" id="reactionsBar">
+          <button class="reaction-btn" data-reaction="👍">👍</button>
+          <button class="reaction-btn" data-reaction="❤️">❤️</button>
+          <button class="reaction-btn" data-reaction="🎉">🎉</button>
+          <button class="reaction-btn" data-reaction="😂">😂</button>
+          <button class="reaction-btn" data-reaction="✨">✨</button>
+        </div>
+        <div class="chat-input-row">
+          <input id="chatInput" type="text" placeholder="Type a message..." />
+          <button id="chatSendBtn">Send</button>
+        </div>
+      </div>
       <button
         id="clearCanvasFloating"
         class="floating-clear-btn"
         title="Clear Canvas">
         🧹
+      </button>
+      <button id="chatToggleBtn" class="floating-chat-btn" title="Toggle Chat">
+        💬
       </button>
       <button
         id="mobileMoreBtn"
@@ -232,6 +255,6 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
-    <script src="client.js"></script>
+    <script src="client.js?v=2"></script>
   </body>
 </html>
