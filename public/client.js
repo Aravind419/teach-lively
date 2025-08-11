@@ -681,6 +681,10 @@ if (chatToggleBtn && chatPanel) {
     const isMobile = window.innerWidth <= 700;
     chatPanel.classList.remove("open");
     chatPanel.style.display = isMobile ? "" : "flex";
+    // Expose navbar height to CSS for mobile chat sizing
+    const navbarEl = document.querySelector(".navbar");
+    const navH = navbarEl ? navbarEl.offsetHeight : 0;
+    document.documentElement.style.setProperty("--navbar-height", `${navH}px`);
   }
   window.addEventListener("resize", setInitialChatVisibility);
   setInitialChatVisibility();

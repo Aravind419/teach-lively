@@ -227,6 +227,7 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0; /* allow proper flex scrolling in mobile panel */
 }
 .chat-message {
   background: var(--canvas-bg);
@@ -263,6 +264,7 @@ canvas {
   gap: 8px;
   padding: 10px;
   border-top: 1px solid var(--panel-border);
+  background: var(--panel-bg);
 }
 .chat-input-row input {
   flex: 1;
@@ -325,17 +327,20 @@ canvas {
   }
   .chat-panel {
     position: fixed;
-    top: 0;
+    top: var(--navbar-height, 0px);
     bottom: 0;
     right: 0;
     width: 80vw;
     max-width: none;
-    height: 100vh;
+    height: calc(100vh - var(--navbar-height, 0px));
     border-left: 1px solid var(--panel-border);
     border-top: none;
     transform: translateX(100%);
     transition: transform 0.3s ease;
     z-index: 2300;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: max(env(safe-area-inset-bottom), 8px);
   }
   .chat-panel.open {
     transform: translateX(0);
