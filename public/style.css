@@ -265,7 +265,7 @@ canvas {
   padding: 10px;
   border-top: 1px solid var(--panel-border);
   background: var(--panel-bg);
-  margin-bottom: 60px;
+
 }
 .chat-input-row input {
   flex: 1;
@@ -342,6 +342,10 @@ canvas {
     display: flex;
     flex-direction: column;
     padding-bottom: max(env(safe-area-inset-bottom), 8px);
+    
+  }
+  .chat-input-row {
+    margin-bottom: 16px;
   }
   .chat-panel.open {
     transform: translateX(0);
@@ -419,6 +423,7 @@ canvas {
     justify-content: flex-start !important;
     padding: 8px 6px !important;
     gap: 10px !important;
+    
   }
   .navbar > * {
     margin-right: 8px !important;
